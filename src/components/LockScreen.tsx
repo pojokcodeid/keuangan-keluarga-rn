@@ -1,20 +1,20 @@
 // =============================================================================
 // LockScreen.tsx — Layar kunci PIN (keypad + titik, verifikasi SHA-256)
-// Port dari mekanisme lock di js/auth.js + index.html (lock overlay)
+// Mendukung PIN dinamis 4–6 digit angka sesuai pengaturan pengguna.
 // =============================================================================
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../state/ThemeContext';
 import { useApp } from '../state/AppContext';
-import { verifyPin } from '../lib/auth';
+import { getPinLength, getPinLengthSync, verifyPin } from '../lib/auth';
 
-const MAX_PIN = 8;
 const MIN_PIN = 4;
+const MAX_PIN = 6;
 
-const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'];
+const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'ok', '0', 'del'];
 
 export function LockScreen() {
   const { c } = useTheme();
@@ -23,7 +23,20 @@ export function LockScreen() {
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [expectedLen, setExpectedLen] = useState<number | null>(() => getPinLengthSync());
   const shake = useMemo(() => new Animated.Value(0), []);
+
+  useEffect(() => {
+    let alive = true;
+    getPinLength().then((len) => {
+      if (alive && len) {
+        setExpectedLen(len);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const doShake = useCallback(() => {
     shake.setValue(0);
@@ -66,25 +79,65 @@ export function LockScreen() {
     [checking, doShake, unlock]
   );
 
+  const silentAttempt = useCallback(
+    async (value: string) => {
+      if (checking || value.length < MIN_PIN) return;
+      try {
+        const ok = await verifyPin(value);
+        if (ok) {
+          unlock();
+        }
+      } catch {
+        // Abaikan jika belum cocok, user mungkin sedang mengetik digit ke-5 atau 6
+      }
+    },
+    [checking, unlock]
+  );
+
   const press = useCallback(
     (key: string) => {
       if (!key) return;
       if (key === 'del') {
-        setPin((p) => p.slice(0, -1));
+        if (!checking) {
+          setPin((p) => p.slice(0, -1));
+        }
         return;
       }
-      if (pin.length >= MAX_PIN || checking) return;
+      if (key === 'ok') {
+        if (!checking && pin.length >= (expectedLen ?? MIN_PIN)) {
+          attempt(pin);
+        }
+        return;
+      }
+
+      const maxAllowed = expectedLen ?? MAX_PIN;
+      if (pin.length >= maxAllowed || checking) return;
+
       const next = pin + key;
       setPin(next);
-      if (next.length >= MIN_PIN) attempt(next);
+
+      if (expectedLen) {
+        if (next.length === expectedLen) {
+          attempt(next);
+        }
+      } else {
+        // Panjang PIN belum tersimpan di metadata (data lama)
+        if (next.length === MAX_PIN) {
+          attempt(next);
+        } else if (next.length >= MIN_PIN) {
+          silentAttempt(next);
+        }
+      }
     },
-    [attempt, checking, pin]
+    [attempt, checking, expectedLen, pin, silentAttempt]
   );
 
   // Mencegah tombol back Android keluar dari aplikasi saat terkunci:
   // layar lock dirender sebagai root pengganti konten utama.
 
-  const dots = Math.max(pin.length, 0);
+  const totalDots = expectedLen ?? Math.max(MIN_PIN, Math.min(MAX_PIN, pin.length || MIN_PIN));
+  const dotsFilled = Math.min(pin.length, totalDots);
+  const canSubmit = pin.length >= (expectedLen ?? MIN_PIN);
 
   return (
     <View style={[styles.wrap, { backgroundColor: c.bg, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}>
@@ -94,13 +147,17 @@ export function LockScreen() {
         </View>
         <Text style={[styles.title, { color: c.text }]}>Keuangan Keluarga</Text>
         <Text style={[styles.sub, { color: c.muted }]}>
-          {error ? 'PIN salah, coba lagi' : 'Masukkan PIN untuk membuka aplikasi'}
+          {error
+            ? 'PIN salah, coba lagi'
+            : expectedLen
+            ? `Masukkan ${expectedLen} digit PIN untuk membuka aplikasi`
+            : 'Masukkan PIN untuk membuka aplikasi'}
         </Text>
       </View>
 
       <Animated.View style={[styles.dots, { transform: [{ translateX: shake }] }]}>
-        {Array.from({ length: Math.max(pin.length, MIN_PIN) }).map((_, i) => {
-          const filled = i < dots;
+        {Array.from({ length: totalDots }).map((_, i) => {
+          const filled = i < dotsFilled;
           return (
             <View
               key={i}
@@ -117,29 +174,36 @@ export function LockScreen() {
       </Animated.View>
 
       <View style={styles.pad}>
-        {KEYS.map((key, i) => {
-          if (key === '') {
-            return <View key={`empty-${i}`} style={styles.keySlot} />;
-          }
+        {KEYS.map((key) => {
           const isDel = key === 'del';
+          const isOk = key === 'ok';
+
           return (
             <Pressable
               key={key}
               onPress={() => press(key)}
+              disabled={isOk && !canSubmit}
               style={({ pressed }) => [
                 styles.key,
                 {
                   backgroundColor: pressed
                     ? c.primarySoft
-                    : isDel
+                    : isDel || isOk
                     ? 'transparent'
                     : c.card,
-                  borderColor: isDel ? 'transparent' : c.border,
+                  borderColor: isDel || isOk ? 'transparent' : c.border,
+                  opacity: isOk && !canSubmit ? 0.3 : 1,
                 },
               ]}
             >
               {isDel ? (
                 <FontAwesome6 name="delete-left" size={20} color={c.subtext} />
+              ) : isOk ? (
+                <FontAwesome6
+                  name="check"
+                  size={20}
+                  color={canSubmit ? c.primary : c.borderStrong}
+                />
               ) : (
                 <Text style={[styles.keyText, { color: c.text }]}>{key}</Text>
               )}
@@ -187,9 +251,11 @@ const styles = StyleSheet.create({
   dots: {
     flexDirection: 'row',
     gap: 14,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 20,
+    minHeight: 24,
   },
   dot: {
     width: 16,
@@ -204,10 +270,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 14,
-  },
-  keySlot: {
-    width: 74,
-    height: 74,
   },
   key: {
     width: 74,

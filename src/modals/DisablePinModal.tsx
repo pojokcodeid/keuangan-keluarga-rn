@@ -16,14 +16,19 @@ export function DisablePinModal() {
   const [pin, setPin] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const handleClose = () => {
+    setPin('');
+    setSaving(false);
+    closeModal();
+  };
+
   const submit = async () => {
     if (!pin) return showToast('Masukkan PIN untuk konfirmasi', 'warning');
     setSaving(true);
     try {
       await disablePin(pin);
       showToast('Proteksi PIN telah dinonaktifkan', 'info');
-      setPin('');
-      closeModal();
+      handleClose();
     } catch (err: any) {
       showToast('Gagal mematikan PIN: ' + (err?.message || String(err)), 'error');
     } finally {
@@ -35,7 +40,7 @@ export function DisablePinModal() {
     <ModalSheet
       visible={modal?.key === 'disablePin'}
       title="Nonaktifkan Kunci PIN"
-      onClose={closeModal}
+      onClose={handleClose}
       maxWidth={440}
     >
       <Text style={{ fontSize: 12, color: c.subtext, lineHeight: 18 }}>

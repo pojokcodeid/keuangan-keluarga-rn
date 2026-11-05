@@ -18,7 +18,16 @@ export function PinModal() {
   const [confirm, setConfirm] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const handleClose = () => {
+    setCurrent('');
+    setNext('');
+    setConfirm('');
+    setSaving(false);
+    closeModal();
+  };
+
   React.useEffect(() => {
+    if (modal?.key !== 'setPin') return;
     let alive = true;
     isPinEnabled()
       .then((v) => {
@@ -28,7 +37,7 @@ export function PinModal() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [modal?.key]);
 
   const isEnabled = enabled === true;
   const isChanging = isEnabled;
@@ -39,8 +48,8 @@ export function PinModal() {
       const ok = await verifyPin(current);
       if (!ok) return showToast('PIN saat ini tidak cocok', 'error');
     }
-    if (!next || next.length < 4) {
-      return showToast('PIN baru minimal harus 4 digit angka', 'warning');
+    if (!next || next.length < 4 || next.length > 6) {
+      return showToast('PIN baru harus terdiri dari 4–6 digit angka', 'warning');
     }
     if (next !== confirm) return showToast('Konfirmasi PIN baru tidak cocok', 'warning');
 
@@ -48,7 +57,7 @@ export function PinModal() {
     try {
       await setupNewPin(next);
       showToast('PIN keamanan berhasil disimpan! Aplikasi kini terlindungi.', 'success');
-      closeModal();
+      handleClose();
     } catch (err: any) {
       showToast('Gagal mengatur PIN: ' + (err?.message || String(err)), 'error');
     } finally {
@@ -60,7 +69,7 @@ export function PinModal() {
     <ModalSheet
       visible={modal?.key === 'setPin'}
       title={isChanging ? 'Ubah PIN Keamanan' : 'Atur PIN Keamanan'}
-      onClose={closeModal}
+      onClose={handleClose}
       maxWidth={440}
     >
       {isChanging ? (
@@ -68,7 +77,7 @@ export function PinModal() {
           <FieldLabel>PIN Saat Ini</FieldLabel>
           <AppTextInput
             value={current}
-            onChangeText={setCurrent}
+            onChangeText={(v) => setCurrent(v.replace(/\D/g, ''))}
             placeholder="••••••"
             secureTextEntry
             keyboardType="number-pad"

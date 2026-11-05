@@ -2,33 +2,46 @@
   "expo": {
     "name": "Keuangan Keluarga",
     "slug": "keuangan-keluarga-rn",
+    "scheme": "keuangankeluarga",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.keuangan.keluarga"
+      "bundleIdentifier": "com.keuangan.keluarga",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.keuangan.keluarga",
       "adaptiveIcon": {
         "backgroundColor": "#4F46E5",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
+      "bundler": "metro",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-sharing",
-      "expo-status-bar",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#4F46E5",
+          "dark": {
+            "backgroundColor": "#4F46E5"
+          }
+        }
+      ],
       "expo-sqlite",
-      "expo-font"
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

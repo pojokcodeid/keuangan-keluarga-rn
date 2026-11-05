@@ -40,6 +40,7 @@ export function PengaturanScreen() {
     showToast,
     confirm,
     openModal,
+    modal,
     lock,
   } = useApp();
   const { c, mode, setMode } = useTheme();
@@ -65,7 +66,7 @@ export function PengaturanScreen() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [modal]);
 
   // --- Aksi keamanan ---
   const handleAutolock = async (v: string) => {

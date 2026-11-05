@@ -1,17 +1,19 @@
 {
   "expo": {
-    "name": "keuangan-keluarga-rn",
+    "name": "Keuangan Keluarga",
     "slug": "keuangan-keluarga-rn",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.keuangan.keluarga"
     },
     "android": {
+      "package": "com.keuangan.keluarga",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#4F46E5",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -20,6 +22,18 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-splash-screen",
+      "expo-sqlite",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c2237cb3-02b3-4311-9ac1-231da5a1572e"
+      }
     }
   }
 }

@@ -4,18 +4,19 @@
 // =============================================================================
 
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, Alert } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useApp } from '../state/AppContext';
 import { useTheme, ThemeMode } from '../state/ThemeContext';
 import { ActionRow, Card, Chip, IconBtn, SectionTitle } from '../components/ui';
 import { SegmentedControl, SelectField } from '../components/form';
+import { ResetDataSheet } from '../components/ResetDataSheet';
 import { IconBadge } from '../lib/icons';
 import { formatCurrency } from '../lib/utils';
 import { deleteAccount, deleteCategory } from '../lib/db';
 import { getAccountBalance } from '../lib/selectors';
 import { getAutolockSetting, isPinEnabled, setAutolockSetting } from '../lib/auth';
-import { backupDatabase, restoreDatabase } from '../lib/backup';
+import { backupDatabase, backupDatabaseSqlite, restoreDatabase } from '../lib/backup';
 import { exportToExcel } from '../lib/excel';
 
 type CatTab = 'income' | 'expense';
@@ -49,6 +50,7 @@ export function PengaturanScreen() {
   const [autolock, setAutolock] = useState('immediate');
   const [catTab, setCatTab] = useState<CatTab>('expense');
   const [busy, setBusy] = useState<string | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
 
   // Muat status PIN & pengaturan auto-lock (asinkron, tanpa reset sinkron)
   useEffect(() => {
@@ -66,7 +68,7 @@ export function PengaturanScreen() {
     return () => {
       alive = false;
     };
-  }, [modal]);
+  }, [modal, resetOpen]);
 
   // --- Aksi keamanan ---
   const handleAutolock = async (v: string) => {
@@ -113,12 +115,22 @@ export function PengaturanScreen() {
   };
 
   // --- Data & backup ---
-  const handleBackup = async () => {
+  const runBackup = async (format: 'zip' | 'sqlite') => {
     if (busy) return;
     setBusy('backup');
     try {
-      await backupDatabase();
-      showToast('Backup database SQLite berhasil dibuat', 'success');
+      if (format === 'zip') {
+        const { photos } = await backupDatabase();
+        showToast(
+          photos > 0
+            ? `Backup lengkap dibuat (database + ${photos} foto)`
+            : 'Backup database berhasil dibuat',
+          'success'
+        );
+      } else {
+        await backupDatabaseSqlite();
+        showToast('Backup database SQLite berhasil dibuat', 'success');
+      }
     } catch (err: any) {
       showToast('Gagal membuat backup: ' + (err?.message || String(err)), 'error');
     } finally {
@@ -126,19 +138,38 @@ export function PengaturanScreen() {
     }
   };
 
+  const handleBackup = () => {
+    if (busy) return;
+    Alert.alert(
+      'Download Backup',
+      'Pilih format backup yang ingin dibuat.',
+      [
+        { text: 'Lengkap (ZIP + Foto)', onPress: () => runBackup('zip') },
+        { text: 'Database Saja (.sqlite)', onPress: () => runBackup('sqlite') },
+        { text: 'Batal', style: 'cancel' },
+      ],
+      { cancelable: true }
+    );
+  };
+
   const handleRestore = async () => {
     if (busy) return;
     const ok = await confirm(
-      'Restore Database',
-      'Data saat ini akan ditimpa dengan isi file backup. Lanjutkan?'
+      'Restore Backup',
+      'Data saat ini (termasuk foto lampiran) akan ditimpa dengan isi file backup. Lanjutkan?'
     );
     if (!ok) return;
     setBusy('restore');
     try {
-      const done = await restoreDatabase();
-      if (done) {
+      const result = await restoreDatabase();
+      if (result.restored) {
         await refresh();
-        showToast('Database berhasil dipulihkan!', 'success');
+        showToast(
+          result.format === 'zip' && result.photos > 0
+            ? `Backup dipulihkan — ${result.photos} foto lampiran ikut dipulihkan`
+            : 'Database berhasil dipulihkan!',
+          'success'
+        );
       }
     } catch (err: any) {
       showToast('Gagal memulihkan database: ' + (err?.message || String(err)), 'error');
@@ -158,6 +189,18 @@ export function PengaturanScreen() {
     } finally {
       setBusy(null);
     }
+  };
+
+  const handleResetDone = async (message: string) => {
+    await refresh();
+    // Reset total menghapus PIN — muat ulang status keamanan di layar ini
+    try {
+      setPinOn(await isPinEnabled());
+      setAutolock(await getAutolockSetting());
+    } catch {
+      /* abaikan */
+    }
+    showToast(message, 'success');
   };
 
   const categories = snap.categories.filter((cat) => cat.type === catTab);
@@ -361,7 +404,11 @@ export function PengaturanScreen() {
             iconBg={c.primarySoft}
             iconColor={c.primary}
             title="Download Backup"
-            subtitle="Simpan database sebagai file .sqlite"
+            subtitle={
+              busy === 'backup'
+                ? 'Menyiapkan backup…'
+                : 'Simpan database + semua foto lampiran (.zip)'
+            }
             onPress={handleBackup}
           />
           <View style={[styles.hairline, { backgroundColor: c.border }]} />
@@ -370,7 +417,9 @@ export function PengaturanScreen() {
             iconBg={c.warningSoft}
             iconColor={c.warning}
             title="Restore / Import Backup"
-            subtitle={busy === 'restore' ? 'Memulihkan…' : 'Muat ulang data dari file .sqlite'}
+            subtitle={
+              busy === 'restore' ? 'Memulihkan…' : 'Pulihkan data dari file .zip atau .sqlite'
+            }
             onPress={handleRestore}
           />
           <View style={[styles.hairline, { backgroundColor: c.border }]} />
@@ -381,6 +430,16 @@ export function PengaturanScreen() {
             title="Export ke Excel"
             subtitle={busy === 'excel' ? 'Menyiapkan…' : 'Bagikan semua data dalam format .xlsx'}
             onPress={handleExcel}
+          />
+          <View style={[styles.hairline, { backgroundColor: c.border }]} />
+          <ActionRow
+            icon="trash-can"
+            iconBg={c.dangerSoft}
+            iconColor={c.danger}
+            title="Reset Data"
+            titleColor={c.danger}
+            subtitle="Hapus transaksi, semua data, atau seluruh database"
+            onPress={() => setResetOpen(true)}
           />
         </Card>
       </View>
@@ -395,6 +454,13 @@ export function PengaturanScreen() {
           <Chip label={`${snap.transactions.length} transaksi · ${snap.accounts.length} akun`} color={c.subtext} icon="database" />
         </View>
       </View>
+
+      <ResetDataSheet
+        visible={resetOpen}
+        onClose={() => setResetOpen(false)}
+        onDone={handleResetDone}
+        onError={(msg) => showToast(msg, 'error')}
+      />
     </ScrollView>
   );
 }

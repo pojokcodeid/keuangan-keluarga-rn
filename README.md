@@ -32,7 +32,7 @@ npx expo-doctor    # dependensi & konfigurasi
 | Transaksi | Filter bulan/akun/kategori, daftar dikelompokkan per tanggal, tambah/edit/hapus (pemasukan, pengeluaran, transfer) |
 | Budget | Harian / mingguan / bulanan, indikator tonal (hijau <75%, amber 75–99%, merah ≥100%), sisa & batas aman/hari |
 | Laporan | Tab Ringkasan (ringkasan bulanan + penggunaan anggaran) & Grafik (donut per kategori, budget vs realisasi, batang pemasukan vs pengeluaran 6 bulan), ekspor Excel |
-| Pengaturan | Tema Terang/Gelap/Otomatis, PIN + auto-lock, akun & dompet, kategori (pemasukan/pengeluaran), backup/restore `.sqlite`, export `.xlsx` |
+| Pengaturan | Tema Terang/Gelap/Otomatis, PIN + auto-lock, akun & dompet, kategori (pemasukan/pengeluaran), backup/restore (`.zip` dengan foto lampiran, atau `.sqlite` saja), export `.xlsx` |
 | Keamanan | PIN SHA-256 + salt (expo-crypto), layar kunci keypad, kunci otomatis saat aplikasi ke latar (mode "segera") |
 
 ## Struktur
@@ -48,7 +48,7 @@ src/
     db.ts                   # skema + CRUD (identik js/db.js), backup/restore bytes
     selectors.ts            # turunan: saldo, ringkasan bulanan, budget, grafik
     auth.ts                 # PIN, sesi, auto-lock
-    excel.ts / backup.ts    # ekspor .xlsx, backup/restore .sqlite
+    excel.ts / backup.ts    # ekspor .xlsx, backup/restore .zip (db + foto) & .sqlite
     icons.tsx / utils.ts    # ikon FA6 + kompatibilitas data lama, format rupiah/tanggal
   components/               # form, date picker, modal sheet, chart SVG, toast, lock, dsb.
   modals/                   # transaksi, budget, akun, kategori, set/PIN, nonaktifkan PIN
@@ -59,6 +59,9 @@ src/
 
 - Skema tabel `accounts`, `categories`, `transactions`, `budgets` identik dengan
   sql.js di versi web → file backup `.sqlite` dapat dipindahkan dua arah.
+- Backup `.zip` berisi `database.sqlite` + seluruh foto di folder `attachments/`.
+  Restore mendeteksi format otomatis dari isi berkas: `.zip` memulihkan database
+  beserta fotonya, `.sqlite` memulihkan database saja (format lama).
 - Ikon tersimpan sebagai `"fa-solid fa-utensils|#F97316"`; nama ikon lama (lucide)
   dan emoji mentah tetap dirender lewat `parseIcon()`.
 - Data awal (2 akun, kategori, migrasi batas anggaran kategori → budget) mengikuti

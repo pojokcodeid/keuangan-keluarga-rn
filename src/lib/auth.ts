@@ -171,6 +171,17 @@ export async function disablePin(currentPin: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Hapus seluruh data keamanan (PIN, hash, salt, panjang PIN, auto-lock).
+ * Dipakai oleh reset pabrik agar aplikasi kembali seperti baru terpasang.
+ */
+export async function clearAuthSettings(): Promise<void> {
+  await AsyncStorage.multiRemove(Object.values(STORAGE_KEYS));
+  cachedPinLength = null;
+  sessionUnlocked = false;
+  lastActivity = 0;
+}
+
 export async function getAutolockSetting(): Promise<string> {
   return (await AsyncStorage.getItem(STORAGE_KEYS.AUTOLOCK)) || 'immediate';
 }

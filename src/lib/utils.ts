@@ -69,6 +69,13 @@ export function parseAmount(str: string | number | null | undefined): number {
 // Date helpers
 // ---------------------------------------------------------------------------
 
+/** Format ukuran file ke satuan yang mudah dibaca (KB / MB). */
+export function formatFileSize(bytes: number | null | undefined): string {
+  if (!bytes || bytes <= 0) return '0 KB';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }

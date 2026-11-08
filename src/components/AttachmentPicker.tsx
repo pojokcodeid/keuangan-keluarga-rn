@@ -2,7 +2,7 @@
 // AttachmentPicker.tsx — Lampiran gambar (kamera langsung & galeri HP)
 // =============================================================================
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../state/ThemeContext';
 import { deleteAttachmentFile, saveAttachmentImage } from '../lib/db';
 import { beginExternalActivity, endExternalActivity } from '../lib/auth';
+import { getFileSize } from '../lib/compress';
+import { formatFileSize } from '../lib/utils';
 import { FieldLabel } from './form';
 
 interface Props {
@@ -38,6 +40,9 @@ export function AttachmentPicker({
   const [loading, setLoading] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [pickerModalOpen, setPickerModalOpen] = useState(false);
+
+  // Ukuran file lampiran (bukti kompresi) — dihitung saat nilai berubah
+  const fileSize = useMemo(() => (value ? getFileSize(value) : 0), [value]);
 
   // --- Ambil foto langsung dari Kamera ---
   const handleCamera = async () => {
@@ -58,7 +63,9 @@ export function AttachmentPicker({
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        quality: 0.8,
+        // Kualitas biarkan penuh — kompresi & resize dilakukan terpusat
+        // di saveAttachmentImage (expo-image-manipulator)
+        quality: 1,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -97,7 +104,9 @@ export function AttachmentPicker({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        quality: 0.8,
+        // Kualitas biarkan penuh — kompresi & resize dilakukan terpusat
+        // di saveAttachmentImage (expo-image-manipulator)
+        quality: 1,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -161,7 +170,9 @@ export function AttachmentPicker({
                 Bukti Foto Terlampir
               </Text>
             </View>
-            <Text style={{ fontSize: 11, color: c.muted }}>Ketuk foto untuk memperbesar</Text>
+            <Text style={{ fontSize: 11, color: c.muted }}>
+              {fileSize > 0 ? `${formatFileSize(fileSize)} · dikompresi otomatis` : 'Ketuk foto untuk memperbesar'}
+            </Text>
 
             <View style={styles.actionRow}>
               <Pressable

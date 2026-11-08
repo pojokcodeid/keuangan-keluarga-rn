@@ -29,3 +29,8 @@ export function writeDraft(key: string, data: DraftData): void {
 export function clearDraft(key: string): void {
   drafts.delete(key);
 }
+
+/** Hapus semua draft (dipakai saat reset data agar tidak ada isi form basi). */
+export function clearAllDrafts(): void {
+  drafts.clear();
+}

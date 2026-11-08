@@ -5,6 +5,7 @@
 
 import * as SQLite from 'expo-sqlite';
 import { Directory, File, Paths } from 'expo-file-system';
+import { compressImage } from './compress';
 
 // ---------------------------------------------------------------------------
 // Tipe data
@@ -177,18 +178,43 @@ async function ensureTransactionColumns(): Promise<void> {
   }
 }
 
-/** Simpan gambar lampiran ke folder dokumen aplikasi agar permanen */
+/** Simpan gambar lampiran ke folder dokumen aplikasi agar permanen.
+ *  Gambar dikompresi dulu (maks. 1600 px, JPEG 0.7) agar hemat penyimpanan. */
 export async function saveAttachmentImage(sourceUri: string): Promise<string> {
+  // Kompres dulu ke cache; bila gagal, pakai file sumber apa adanya
+  let preparedUri = sourceUri;
+  let preparedExt: string | null = null;
+  try {
+    const result = await compressImage(sourceUri);
+    if (result.compressed) {
+      preparedUri = result.uri;
+      preparedExt = 'jpg';
+    }
+  } catch (err) {
+    console.warn('Kompresi gambar gagal, menyimpan file asli:', err);
+  }
+
   const attachmentsDir = new Directory(Paths.document, 'attachments');
   if (!attachmentsDir.exists) {
     attachmentsDir.create();
   }
-  const cleanExt = sourceUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+  const cleanExt =
+    preparedExt || preparedUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
   const ext = ['jpg', 'jpeg', 'png', 'webp', 'heic'].includes(cleanExt) ? cleanExt : 'jpg';
   const filename = `tx_receipt_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
   const destFile = new File(attachmentsDir, filename);
-  const srcFile = new File(sourceUri);
+  const srcFile = new File(preparedUri);
   await srcFile.copy(destFile);
+
+  // Buang file sementara hasil kompresi di cache
+  if (preparedUri !== sourceUri) {
+    try {
+      const temp = new File(preparedUri);
+      if (temp.exists) temp.delete();
+    } catch {
+      /* file cache akan dibersihkan sistem */
+    }
+  }
   return destFile.uri;
 }
 
@@ -571,6 +597,64 @@ export async function deleteBudget(id: number): Promise<void> {
 }
 
 // =============================================================================
+// Reset data
+// =============================================================================
+
+export type ResetScope = 'transactions' | 'all' | 'database';
+
+/** Hapus seluruh folder lampiran foto transaksi (abaikan bila gagal). */
+function deleteAttachmentsFolder(): void {
+  try {
+    const dir = new Directory(Paths.document, 'attachments');
+    if (dir.exists) dir.delete();
+  } catch {
+    /* file sisa tidak menghalangi reset */
+  }
+}
+
+/**
+ * Reset data sesuai cakupan:
+ * - 'transactions': hapus semua transaksi, budget, dan foto lampiran
+ * - 'all': + hapus akun & kategori, lalu kembalikan data bawaan (seperti baru)
+ * - 'database': hapus berkas database + lampiran lalu buat ulang dari nol
+ *
+ * PIN & pengaturan keamanan TIDAK disentuh di sini (lihat auth.clearAuthSettings).
+ */
+export async function resetData(scope: ResetScope): Promise<void> {
+  if (scope === 'database') {
+    await closeDatabase();
+
+    const target = databaseFile();
+    if (target.exists) target.delete();
+
+    // Hapus berkas sampingan WAL/SHM agar tidak mencampur data lama
+    for (const suffix of ['-wal', '-shm']) {
+      const side = new File(Paths.document, 'SQLite', DB_NAME + suffix);
+      if (side.exists) side.delete();
+    }
+
+    db = null;
+    // initDatabase membuat skema segar + menanam data bawaan (akun & kategori)
+    await initDatabase();
+    deleteAttachmentsFolder();
+    return;
+  }
+
+  // Hapus data dulu — bila gagal, lampiran tidak ikut hilang
+  await getDB().withTransactionAsync(async () => {
+    await run('DELETE FROM transactions');
+    await run('DELETE FROM budgets');
+    if (scope === 'all') {
+      await run('DELETE FROM accounts');
+      await run('DELETE FROM categories');
+    }
+  });
+
+  if (scope === 'all') await seedData();
+  deleteAttachmentsFolder();
+}
+
+// =============================================================================
 // Backup & Restore (level file)
 // =============================================================================
 
@@ -607,4 +691,29 @@ export async function importDatabase(bytes: Uint8Array): Promise<void> {
 
   db = null;
   await initDatabase();
+}
+
+/**
+ * Setelah restore backup lintas perangkat, `attachment_uri` di database masih
+ * menunjuk ke path absolut perangkat lama. Arahkan kembali ke folder lampiran
+ * perangkat ini berdasarkan nama berkasnya (bila berkasnya memang ada).
+ * @returns jumlah transaksi yang path lampirannya diperbarui
+ */
+export async function remapAttachmentUris(): Promise<number> {
+  const rows = await query<{ id: number; attachment_uri: string }>(
+    'SELECT id, attachment_uri FROM transactions WHERE attachment_uri IS NOT NULL'
+  );
+  if (!rows || rows.length === 0) return 0;
+
+  const dir = new Directory(Paths.document, 'attachments');
+  let updated = 0;
+  for (const row of rows) {
+    const name = String(row.attachment_uri).split('/').pop() || '';
+    if (!name) continue;
+    const target = new File(dir, name);
+    if (!target.exists || target.uri === row.attachment_uri) continue;
+    await run('UPDATE transactions SET attachment_uri = ? WHERE id = ?', [target.uri, row.id]);
+    updated++;
+  }
+  return updated;
 }

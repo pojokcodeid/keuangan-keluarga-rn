@@ -185,6 +185,10 @@ export async function setAutolockSetting(val: string): Promise<void> {
  * @returns true jika aplikasi harus dikunci
  */
 export async function evaluateLockOnBackground(): Promise<boolean> {
+  // Selama kamera/galeri/pemilih berkas sistem terbuka, aplikasi memang
+  // berpindah ke background. Jangan kunci agar pengguna tidak diminta PIN
+  // setiap kali mengambil foto dan form tidak kehilangan isinya.
+  if (isExternalActivityActive()) return false;
   if (!(await isPinEnabled())) return false;
   const setting = await getAutolockSetting();
   if (setting === 'immediate') {
@@ -195,6 +199,7 @@ export async function evaluateLockOnBackground(): Promise<boolean> {
 }
 
 export async function evaluateLockOnForeground(): Promise<boolean> {
+  if (isExternalActivityActive()) return false;
   if (!(await isPinEnabled())) return false;
   const setting = await getAutolockSetting();
   if (setting === 'never') return false;
@@ -218,4 +223,31 @@ export function getSessionUnlocked(): boolean {
 
 export function forceSessionUnlocked(): void {
   setSessionUnlocked();
+}
+
+// ---------------------------------------------------------------------------
+// Aktivitas eksternal (kamera, galeri, pemilih berkas, panel berbagi).
+// Sistem membuka activity/panel di luar aplikasi sehingga AppState berpindah
+// ke 'background'/'inactive'. Tanpa penanda ini, auto-lock 'immediate'
+// (pengaturan default) mengunci aplikasi setiap kali pengguna membuka
+// kamera/galeri — memaksa PIN berulang dan membuat modal form tidak lagi
+// dirender sehingga isinya (termasuk foto lampiran) hilang.
+// ---------------------------------------------------------------------------
+let externalActivityDepth = 0;
+
+/** Tandai dimulainya aktivitas eksternal. Panggil SEBELUM membuka kamera/galeri/panel sistem. */
+export function beginExternalActivity(): void {
+  externalActivityDepth += 1;
+}
+
+/** Tandai berakhirnya aktivitas eksternal. Panggil di blok `finally`. */
+export function endExternalActivity(): void {
+  externalActivityDepth = Math.max(0, externalActivityDepth - 1);
+  // Hitung ulang waktu auto-lock setelah kembali dari activity eksternal
+  if (externalActivityDepth === 0 && sessionUnlocked) touchActivity();
+}
+
+/** true jika ada aktivitas eksternal yang sedang berjalan. */
+export function isExternalActivityActive(): boolean {
+  return externalActivityDepth > 0;
 }

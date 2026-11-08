@@ -17,6 +17,7 @@ import { initDatabase, loadSnapshot, Snapshot } from '../lib/db';
 import {
   evaluateLockOnBackground,
   evaluateLockOnForeground,
+  isExternalActivityActive,
   isPinEnabled,
   isSessionUnlocked,
   lockSession,
@@ -205,6 +206,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // --- Cek berkala (15 detik) seperti versi web ---
   useEffect(() => {
     const timer = setInterval(async () => {
+      // Lewati saat kamera/galeri/pemilih berkas sistem sedang terbuka
+      if (isExternalActivityActive()) return;
       if (await isPinEnabled()) {
         if (!(await isSessionUnlocked())) setLocked(true);
       }

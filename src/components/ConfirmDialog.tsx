@@ -18,6 +18,8 @@ export function ConfirmHost() {
       transparent
       animationType="fade"
       onRequestClose={() => resolveConfirm(false)}
+      statusBarTranslucent
+      navigationBarTranslucent
     >
       <View style={[styles.backdrop, { backgroundColor: c.overlay }]}>
         <View style={[styles.dialog, { backgroundColor: c.card }]}>

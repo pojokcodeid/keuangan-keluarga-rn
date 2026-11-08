@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useTheme } from '../state/ThemeContext';
+import { resolveFocusTarget, useSheetFocus } from './sheetFocus';
 import { formatNumberString, parseAmount } from '../lib/utils';
 
 export function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -29,12 +30,18 @@ export function AppTextInput(
   props: React.ComponentProps<typeof TextInput> & { containerStyle?: StyleProp<ViewStyle> }
 ) {
   const { c } = useTheme();
-  const { containerStyle, style, ...rest } = props;
+  const { containerStyle, style, onFocus, ...rest } = props;
+  const sheetFocus = useSheetFocus();
   return (
     <View style={[styles.inputWrap, { backgroundColor: c.inputBg, borderColor: c.inputBorder }, containerStyle]}>
       <TextInput
         placeholderTextColor={c.muted}
         {...rest}
+        onFocus={(e) => {
+          // Beri tahu sheet agar otomatis menggulir ke input ini saat keyboard muncul
+          sheetFocus?.onInputFocus(resolveFocusTarget(e.target));
+          onFocus?.(e);
+        }}
         style={[styles.input, { color: c.text }, style]}
       />
     </View>
@@ -58,6 +65,7 @@ export function NumberInput({
   editable?: boolean;
 }) {
   const { c } = useTheme();
+  const sheetFocus = useSheetFocus();
   const [text, setText] = useState(value);
   const [prevValue, setPrevValue] = useState(value);
 
@@ -83,6 +91,7 @@ export function NumberInput({
       <TextInput
         value={text}
         onChangeText={handleChange}
+        onFocus={(e) => sheetFocus?.onInputFocus(resolveFocusTarget(e.target))}
         keyboardType="number-pad"
         placeholder={placeholder}
         placeholderTextColor={c.muted}
@@ -239,7 +248,14 @@ export function SelectField({
         <FontAwesome6 name="chevron-down" size={12} color={c.muted} />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+        statusBarTranslucent
+        navigationBarTranslucent
+      >
         <Pressable style={[styles.selectBackdrop, { backgroundColor: c.overlay }]} onPress={() => setOpen(false)}>
           <View style={[styles.selectSheet, { backgroundColor: c.card }]}>
             {label ? (

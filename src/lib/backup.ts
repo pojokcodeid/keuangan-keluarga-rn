@@ -6,6 +6,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { closeDatabase, databaseFile, importDatabase, initDatabase } from './db';
+import { beginExternalActivity, endExternalActivity } from './auth';
 import { pad2 } from './utils';
 
 /**
@@ -37,11 +38,17 @@ export async function backupDatabase(): Promise<void> {
     throw new Error('Fitur berbagi berkas tidak tersedia di perangkat ini');
   }
 
-  await Sharing.shareAsync(dest.uri, {
-    mimeType: 'application/octet-stream',
-    dialogTitle: 'Simpan Backup Database',
-    UTI: 'public.database',
-  });
+  // Tahan auto-lock: panel berbagi sistem memindahkan aplikasi ke background
+  beginExternalActivity();
+  try {
+    await Sharing.shareAsync(dest.uri, {
+      mimeType: 'application/octet-stream',
+      dialogTitle: 'Simpan Backup Database',
+      UTI: 'public.database',
+    });
+  } finally {
+    endExternalActivity();
+  }
 }
 
 /**
@@ -49,11 +56,18 @@ export async function backupDatabase(): Promise<void> {
  * @returns true jika restore dilakukan
  */
 export async function restoreDatabase(): Promise<boolean> {
-  const result = await DocumentPicker.getDocumentAsync({
-    type: ['*/*'],
-    copyToCacheDirectory: true,
-    multiple: false,
-  });
+  // Tahan auto-lock: pemilih berkas sistem memindahkan aplikasi ke background
+  beginExternalActivity();
+  let result;
+  try {
+    result = await DocumentPicker.getDocumentAsync({
+      type: ['*/*'],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+  } finally {
+    endExternalActivity();
+  }
 
   if (result.canceled || !result.assets || result.assets.length === 0) return false;
 

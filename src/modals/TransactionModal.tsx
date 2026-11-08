@@ -2,7 +2,7 @@
 // TransactionModal.tsx — Tambah / edit transaksi (port dari modal-transaction)
 // =============================================================================
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApp } from '../state/AppContext';
 import { useTheme } from '../state/ThemeContext';
@@ -16,35 +16,81 @@ import {
   SelectField,
 } from '../components/form';
 import { DateField } from '../components/DatePickers';
+import { AttachmentPicker } from '../components/AttachmentPicker';
 import { IconBadge, resolveBudgetIcon } from '../lib/icons';
 import { ProgressBar, tone } from '../components/charts';
-import { addTransaction, TransactionPayload, updateTransaction } from '../lib/db';
+import { addTransaction, deleteTransaction, TransactionPayload, updateTransaction } from '../lib/db';
+import { clearDraft, readDraft, writeDraft } from '../lib/draft';
 import { getAccountBalance, getBudgetsForTransaction } from '../lib/selectors';
 import { formatCurrency, parseAmount, todayISO } from '../lib/utils';
 
 type TxType = 'income' | 'expense' | 'transfer';
 
+/** Isi form transaksi yang ditahan di draft agar tidak hilang saat terkunci */
+type TxDraft = {
+  type: TxType;
+  amountText: string;
+  date: string;
+  accountId: string;
+  toAccountId: string;
+  categoryId: string;
+  note: string;
+  attachmentUri: string | null;
+};
+
 export function TransactionModal() {
-  const { modal, closeModal, snap, refresh, showToast, openModal } = useApp();
+  const { modal, closeModal, snap, refresh, showToast, openModal, confirm } = useApp();
   const { c } = useTheme();
 
   const editingId = modal?.key === 'transaction' ? modal.param : null;
   const existing = editingId ? snap.transactions.find((t) => t.id === editingId) : null;
 
-  const [type, setType] = useState<TxType>(existing?.type || 'expense');
+  // Key draft per transaksi; dibaca satu kali saat mount (termasuk saat mount
+  // ulang setelah aplikasi terkunci lalu dibuka kembali dengan PIN)
+  const draftKey = editingId ? `tx-${editingId}` : 'tx-new';
+  const [draft] = useState(() => readDraft<TxDraft>(draftKey));
+
+  const [type, setType] = useState<TxType>((draft?.type ?? existing?.type) ?? 'expense');
   const [amountText, setAmountText] = useState(
-    existing ? String(Math.round(existing.amount)) : ''
+    draft?.amountText ?? (existing ? String(Math.round(existing.amount)) : '')
   );
-  const [date, setDate] = useState(existing?.transaction_date || todayISO());
-  const [accountId, setAccountId] = useState(existing ? String(existing.account_id) : '');
+  const [date, setDate] = useState((draft?.date ?? existing?.transaction_date) || todayISO());
+  const [accountId, setAccountId] = useState(
+    draft?.accountId ?? (existing ? String(existing.account_id) : '')
+  );
   const [toAccountId, setToAccountId] = useState(
-    existing?.to_account_id ? String(existing.to_account_id) : ''
+    draft?.toAccountId ?? (existing?.to_account_id ? String(existing.to_account_id) : '')
   );
   const [categoryId, setCategoryId] = useState(
-    existing?.category_id ? String(existing.category_id) : ''
+    draft?.categoryId ?? (existing?.category_id ? String(existing.category_id) : '')
   );
-  const [note, setNote] = useState(existing?.note || '');
+  const [note, setNote] = useState(draft?.note ?? existing?.note ?? '');
+  const [attachmentUri, setAttachmentUri] = useState<string | null>(
+    draft?.attachmentUri ?? existing?.attachment_uri ?? null
+  );
   const [saving, setSaving] = useState(false);
+
+  // Tahan isi form di draft setiap kali berubah
+  useEffect(() => {
+    writeDraft(draftKey, {
+      type,
+      amountText,
+      date,
+      accountId,
+      toAccountId,
+      categoryId,
+      note,
+      attachmentUri,
+    });
+  }, [draftKey, type, amountText, date, accountId, toAccountId, categoryId, note, attachmentUri]);
+
+  // Tutup form secara sengaja: buang draft lalu tutup modal.
+  // Saat terkunci (layar PIN) jalur ini TIDAK dipanggil, sehingga draft
+  // tetap ada dan form dipulihkan setelah PIN dimasukkan.
+  const close = () => {
+    clearDraft(draftKey);
+    closeModal();
+  };
 
   const accounts = snap.accounts;
   const categories = useMemo(
@@ -108,6 +154,7 @@ export function TransactionModal() {
       amount,
       transaction_date: date,
       note: note.trim() || null,
+      attachment_uri: attachmentUri || null,
     };
 
     setSaving(true);
@@ -116,7 +163,7 @@ export function TransactionModal() {
       else await addTransaction(payload);
       await refresh();
       showToast(editingId ? 'Transaksi berhasil diperbarui' : 'Transaksi berhasil dicatat', 'success');
-      closeModal();
+      close();
 
       // Peringatan budget setelah pengeluaran tersimpan
       if (type === 'expense') {
@@ -134,13 +181,34 @@ export function TransactionModal() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!editingId) return;
+    const ok = await confirm(
+      'Hapus Transaksi',
+      'Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini tidak dapat dibatalkan.'
+    );
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      await deleteTransaction(editingId);
+      await refresh();
+      showToast('Transaksi berhasil dihapus', 'info');
+      close();
+    } catch (err: any) {
+      showToast('Gagal menghapus transaksi: ' + (err?.message || String(err)), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const periodLabel: Record<string, string> = { daily: 'Harian', weekly: 'Mingguan', monthly: 'Bulanan' };
 
   return (
     <ModalSheet
       visible={modal?.key === 'transaction'}
       title={editingId ? 'Edit Transaksi' : 'Tambah Transaksi'}
-      onClose={closeModal}
+      onClose={close}
     >
       <View style={{ gap: 6 }}>
         <FieldLabel>Jenis Transaksi</FieldLabel>
@@ -250,6 +318,18 @@ export function TransactionModal() {
         />
       </View>
 
+      <AttachmentPicker
+        value={attachmentUri}
+        onChange={setAttachmentUri}
+        label={
+          type === 'income'
+            ? 'Foto Bukti Pemasukan (opsional)'
+            : type === 'expense'
+            ? 'Foto Struk / Bukti Pengeluaran (opsional)'
+            : 'Foto Bukti Transfer (opsional)'
+        }
+      />
+
       <PrimaryButton
         label={editingId ? 'Perbarui Transaksi' : 'Simpan Transaksi'}
         onPress={submit}
@@ -257,15 +337,23 @@ export function TransactionModal() {
       />
 
       {editingId ? (
-        <Text
-          onPress={() => {
-            closeModal();
-            setTimeout(() => openModal('transaction', null), 250);
-          }}
-          style={{ textAlign: 'center', fontSize: 12, color: c.primary, fontWeight: '600' }}
-        >
-          Buat transaksi baru
-        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4, marginTop: 4 }}>
+          <Text
+            onPress={() => {
+              close();
+              setTimeout(() => openModal('transaction', null), 250);
+            }}
+            style={{ fontSize: 13, color: c.primary, fontWeight: '700' }}
+          >
+            + Transaksi Baru
+          </Text>
+          <Text
+            onPress={handleDelete}
+            style={{ fontSize: 13, color: c.danger, fontWeight: '700' }}
+          >
+            Hapus Transaksi
+          </Text>
+        </View>
       ) : null}
     </ModalSheet>
   );

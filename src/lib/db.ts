@@ -4,7 +4,7 @@
 // =============================================================================
 
 import * as SQLite from 'expo-sqlite';
-import { File, Paths } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 
 // ---------------------------------------------------------------------------
 // Tipe data
@@ -37,6 +37,7 @@ export interface TransactionRow {
   amount: number;
   transaction_date: string;
   note: string | null;
+  attachment_uri?: string | null;
   created_at?: string;
   account_name?: string | null;
   account_icon?: string | null;
@@ -100,6 +101,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     amount REAL NOT NULL,
     transaction_date DATE NOT NULL,
     note TEXT,
+    attachment_uri TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (account_id) REFERENCES accounts(id),
     FOREIGN KEY (to_account_id) REFERENCES accounts(id),
@@ -166,6 +168,41 @@ async function scalar(sql: string, params: any[] = []): Promise<number | null> {
 async function ensureBudgetColumns(): Promise<void> {
   const cols = (await query<{ name: string }>('PRAGMA table_info(budgets)')).map((c) => c.name);
   if (!cols.includes('icon')) await run('ALTER TABLE budgets ADD COLUMN icon TEXT');
+}
+
+async function ensureTransactionColumns(): Promise<void> {
+  const cols = (await query<{ name: string }>('PRAGMA table_info(transactions)')).map((c) => c.name);
+  if (!cols.includes('attachment_uri')) {
+    await run('ALTER TABLE transactions ADD COLUMN attachment_uri TEXT');
+  }
+}
+
+/** Simpan gambar lampiran ke folder dokumen aplikasi agar permanen */
+export async function saveAttachmentImage(sourceUri: string): Promise<string> {
+  const attachmentsDir = new Directory(Paths.document, 'attachments');
+  if (!attachmentsDir.exists) {
+    attachmentsDir.create();
+  }
+  const cleanExt = sourceUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+  const ext = ['jpg', 'jpeg', 'png', 'webp', 'heic'].includes(cleanExt) ? cleanExt : 'jpg';
+  const filename = `tx_receipt_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+  const destFile = new File(attachmentsDir, filename);
+  const srcFile = new File(sourceUri);
+  await srcFile.copy(destFile);
+  return destFile.uri;
+}
+
+/** Hapus file lampiran dari penyimpanan */
+export function deleteAttachmentFile(uri: string | null | undefined): void {
+  if (!uri) return;
+  try {
+    const file = new File(uri);
+    if (file.exists) {
+      file.delete();
+    }
+  } catch {
+    /* ignore deletion error */
+  }
 }
 
 // Migrasi satu kali: batas bulanan per kategori lama -> budget bulanan
@@ -239,6 +276,7 @@ export async function initDatabase(): Promise<void> {
 
   await database.execAsync(SCHEMA_SQL);
   await ensureBudgetColumns();
+  await ensureTransactionColumns();
 
   await seedData();
   if (!hadBudgets) await migrateCategoryBudgets();
@@ -395,6 +433,7 @@ export interface TransactionPayload {
   amount: number;
   transaction_date: string;
   note?: string | null;
+  attachment_uri?: string | null;
 }
 
 function validateTransaction(p: TransactionPayload): void {
@@ -415,7 +454,7 @@ function validateTransaction(p: TransactionPayload): void {
 export async function addTransaction(p: TransactionPayload): Promise<void> {
   validateTransaction(p);
   await run(
-    'INSERT INTO transactions (account_id, to_account_id, category_id, type, amount, transaction_date, note) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO transactions (account_id, to_account_id, category_id, type, amount, transaction_date, note, attachment_uri) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     [
       p.account_id,
       p.to_account_id || null,
@@ -424,14 +463,24 @@ export async function addTransaction(p: TransactionPayload): Promise<void> {
       p.amount,
       p.transaction_date,
       p.note || null,
+      p.attachment_uri || null,
     ]
   );
 }
 
 export async function updateTransaction(id: number, p: TransactionPayload): Promise<void> {
   validateTransaction(p);
+  // Cek apakah ada lampiran lama yang diganti atau dihapus
+  const existing = (await query<{ attachment_uri?: string | null }>(
+    'SELECT attachment_uri FROM transactions WHERE id = ?',
+    [id]
+  ))[0];
+  if (existing?.attachment_uri && existing.attachment_uri !== p.attachment_uri) {
+    deleteAttachmentFile(existing.attachment_uri);
+  }
+
   await run(
-    'UPDATE transactions SET account_id = ?, to_account_id = ?, category_id = ?, type = ?, amount = ?, transaction_date = ?, note = ? WHERE id = ?',
+    'UPDATE transactions SET account_id = ?, to_account_id = ?, category_id = ?, type = ?, amount = ?, transaction_date = ?, note = ?, attachment_uri = ? WHERE id = ?',
     [
       p.account_id,
       p.to_account_id || null,
@@ -440,12 +489,20 @@ export async function updateTransaction(id: number, p: TransactionPayload): Prom
       p.amount,
       p.transaction_date,
       p.note || null,
+      p.attachment_uri || null,
       id,
     ]
   );
 }
 
 export async function deleteTransaction(id: number): Promise<void> {
+  const existing = (await query<{ attachment_uri?: string | null }>(
+    'SELECT attachment_uri FROM transactions WHERE id = ?',
+    [id]
+  ))[0];
+  if (existing?.attachment_uri) {
+    deleteAttachmentFile(existing.attachment_uri);
+  }
   await run('DELETE FROM transactions WHERE id = ?', [id]);
 }
 

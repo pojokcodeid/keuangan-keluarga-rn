@@ -102,7 +102,7 @@ function WheelPickerSheet({
 }) {
   const { c } = useTheme();
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <View style={styles.flex}>
         <Pressable style={[styles.backdrop, { backgroundColor: c.overlay }]} onPress={onClose} />
         <View style={[styles.sheet, { backgroundColor: c.card }]}>

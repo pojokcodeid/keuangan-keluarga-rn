@@ -4,7 +4,15 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../state/ThemeContext';
@@ -14,7 +22,11 @@ import { getPinLength, getPinLengthSync, verifyPin } from '../lib/auth';
 const MIN_PIN = 4;
 const MAX_PIN = 6;
 
-const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'ok', '0', 'del'];
+const KEY_ROWS = [
+  ['1', '2', '3', '4'],
+  ['5', '6', '7', '8'],
+  ['ok', '9', '0', 'del'],
+];
 
 export function LockScreen() {
   const { c } = useTheme();
@@ -139,6 +151,15 @@ export function LockScreen() {
   const dotsFilled = Math.min(pin.length, totalDots);
   const canSubmit = pin.length >= (expectedLen ?? MIN_PIN);
 
+  const { width: windowWidth } = useWindowDimensions();
+  // Hitung ukuran tombol dan celah agar rapi di semua ukuran layar (tata letak 4 kolom)
+  const maxPadWidth = 340;
+  const availableWidth = Math.min(windowWidth - 48, maxPadWidth);
+  const gap = availableWidth < 320 ? 8 : 12;
+  const keySize = Math.min(72, Math.floor((availableWidth - gap * 3) / 4));
+  const fontSize = Math.min(26, Math.max(20, Math.round(keySize * 0.38)));
+  const iconSize = Math.min(22, Math.max(18, Math.round(keySize * 0.3)));
+
   return (
     <View style={[styles.wrap, { backgroundColor: c.bg, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.header}>
@@ -173,43 +194,54 @@ export function LockScreen() {
         })}
       </Animated.View>
 
-      <View style={styles.pad}>
-        {KEYS.map((key) => {
-          const isDel = key === 'del';
-          const isOk = key === 'ok';
+      <View style={[styles.pad, { gap }]}>
+        {KEY_ROWS.map((row, rowIdx) => (
+          <View key={rowIdx} style={[styles.row, { gap }]}>
+            {row.map((key) => {
+              const isDel = key === 'del';
+              const isOk = key === 'ok';
 
-          return (
-            <Pressable
-              key={key}
-              onPress={() => press(key)}
-              disabled={isOk && !canSubmit}
-              style={({ pressed }) => [
-                styles.key,
-                {
-                  backgroundColor: pressed
-                    ? c.primarySoft
-                    : isDel || isOk
-                    ? 'transparent'
-                    : c.card,
-                  borderColor: isDel || isOk ? 'transparent' : c.border,
-                  opacity: isOk && !canSubmit ? 0.3 : 1,
-                },
-              ]}
-            >
-              {isDel ? (
-                <FontAwesome6 name="delete-left" size={20} color={c.subtext} />
-              ) : isOk ? (
-                <FontAwesome6
-                  name="check"
-                  size={20}
-                  color={canSubmit ? c.primary : c.borderStrong}
-                />
-              ) : (
-                <Text style={[styles.keyText, { color: c.text }]}>{key}</Text>
-              )}
-            </Pressable>
-          );
-        })}
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => press(key)}
+                  disabled={isOk && !canSubmit}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isDel ? 'Hapus digit' : isOk ? 'Konfirmasi PIN' : `Angka ${key}`
+                  }
+                  style={({ pressed }) => [
+                    styles.key,
+                    {
+                      width: keySize,
+                      height: keySize,
+                      borderRadius: Math.round(keySize / 2),
+                      backgroundColor: pressed
+                        ? c.primarySoft
+                        : isDel || isOk
+                        ? 'transparent'
+                        : c.card,
+                      borderColor: isDel || isOk ? 'transparent' : c.border,
+                      opacity: isOk && !canSubmit ? 0.3 : 1,
+                    },
+                  ]}
+                >
+                  {isDel ? (
+                    <FontAwesome6 name="delete-left" size={iconSize} color={c.subtext} />
+                  ) : isOk ? (
+                    <FontAwesome6
+                      name="check"
+                      size={iconSize}
+                      color={canSubmit ? c.primary : c.borderStrong}
+                    />
+                  ) : (
+                    <Text style={[styles.keyText, { color: c.text, fontSize }]}>{key}</Text>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
       </View>
 
       <View style={styles.reloadHint}>
@@ -266,21 +298,20 @@ const styles = StyleSheet.create({
   pad: {
     width: '100%',
     maxWidth: 340,
+    alignItems: 'center',
+  },
+  row: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 14,
+    alignItems: 'center',
+    width: '100%',
   },
   key: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   keyText: {
-    fontSize: 26,
     fontWeight: '700',
   },
   reloadHint: {

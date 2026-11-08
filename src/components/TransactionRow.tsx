@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { TransactionRow as Tx } from '../lib/db';
 import { useTheme } from '../state/ThemeContext';
 import { IconBadge } from '../lib/icons';
@@ -69,6 +70,12 @@ export function TransactionRowItem({
             {subInfo}
             {tx.note ? ` · ${tx.note}` : ''}
           </Text>
+          {tx.attachment_uri ? (
+            <View style={[styles.attachBadge, { backgroundColor: c.cardAlt }]}>
+              <FontAwesome6 name="paperclip" size={9} color={c.primary} />
+              <Text style={[styles.attachText, { color: c.primary }]}>Foto</Text>
+            </View>
+          ) : null}
         </View>
       </View>
       <View style={styles.right}>
@@ -116,9 +123,25 @@ const styles = StyleSheet.create({
   },
   subRow: {
     marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   sub: {
     fontSize: 11,
+    flexShrink: 1,
+  },
+  attachBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  attachText: {
+    fontSize: 9,
+    fontWeight: '700',
   },
   right: {
     alignItems: 'flex-end',

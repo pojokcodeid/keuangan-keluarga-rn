@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Account, Snapshot } from './db';
+import { beginExternalActivity, endExternalActivity } from './auth';
 import { getAccountBalance } from './selectors';
 import { getCurrentMonth, getCurrentYear, getMonthName, pad2 } from './utils';
 
@@ -46,11 +47,11 @@ export async function exportToExcel(snap: Snapshot, filters?: { month?: number; 
     });
   }
 
-  const txHeaders = ['No', 'Tanggal', 'Jenis', 'Akun Asal', 'Akun Tujuan', 'Kategori', 'Nominal (Rp)', 'Catatan'];
+  const txHeaders = ['No', 'Tanggal', 'Jenis', 'Akun Asal', 'Akun Tujuan', 'Kategori', 'Nominal (Rp)', 'Catatan', 'Lampiran'];
   let txRows: (string | number)[][] = [];
 
   if (transactions.length === 0) {
-    txRows = [['-', '-', 'Belum ada data transaksi', '-', '-', '-', 0, '-']];
+    txRows = [['-', '-', 'Belum ada data transaksi', '-', '-', '-', 0, '-', '-']];
   } else {
     txRows = transactions.map((tx, idx) => [
       idx + 1,
@@ -61,13 +62,14 @@ export async function exportToExcel(snap: Snapshot, filters?: { month?: number; 
       tx.category_name || (tx.type === 'transfer' ? 'Transfer' : 'Tanpa Kategori'),
       Number(tx.amount) || 0,
       tx.note || '',
+      tx.attachment_uri ? 'Ada Bukti Foto' : '-',
     ]);
   }
 
   const wsTransactions = XLSX.utils.aoa_to_sheet([txHeaders, ...txRows]);
   wsTransactions['!cols'] = [
     { wch: 6 }, { wch: 15 }, { wch: 20 }, { wch: 20 },
-    { wch: 20 }, { wch: 22 }, { wch: 18 }, { wch: 35 },
+    { wch: 20 }, { wch: 22 }, { wch: 18 }, { wch: 35 }, { wch: 18 },
   ];
   if (transactions.length > 0) {
     wsTransactions['!autofilter'] = {
@@ -169,11 +171,17 @@ export async function exportToExcel(snap: Snapshot, filters?: { month?: number; 
   await file.write(bytes);
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(file.uri, {
-      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      dialogTitle: 'Bagikan Laporan Excel',
-      UTI: 'org.openxmlformats.spreadsheetml.sheet',
-    });
+    // Tahan auto-lock: panel berbagi sistem memindahkan aplikasi ke background
+    beginExternalActivity();
+    try {
+      await Sharing.shareAsync(file.uri, {
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        dialogTitle: 'Bagikan Laporan Excel',
+        UTI: 'org.openxmlformats.spreadsheetml.sheet',
+      });
+    } finally {
+      endExternalActivity();
+    }
   } else {
     throw new Error('Fitur berbagi berkas tidak tersedia di perangkat ini');
   }

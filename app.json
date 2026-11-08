@@ -40,6 +40,13 @@
           }
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Aplikasi membutuhkan izin untuk memilih foto bukti transaksi dari galeri.",
+          "cameraPermission": "Aplikasi membutuhkan akses kamera untuk mengambil foto struk atau bukti transaksi secara langsung."
+        }
+      ],
       "expo-sqlite",
       "expo-sharing"
     ],

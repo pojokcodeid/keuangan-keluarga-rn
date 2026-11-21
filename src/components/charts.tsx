@@ -10,6 +10,7 @@ import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, G, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { useTheme } from '../state/ThemeContext';
 import { formatAxisLabel } from '../lib/utils';
+import type { Language } from '../i18n/translations';
 
 // ---------------------------------------------------------------------------
 // Donut
@@ -110,9 +111,15 @@ function niceMax(v: number): number {
 export function GroupedBarChart({
   data,
   height = 230,
+  incomeLabel = 'Pemasukan',
+  expenseLabel = 'Pengeluaran',
+  lang = 'id',
 }: {
   data: BarPoint[];
   height?: number;
+  incomeLabel?: string;
+  expenseLabel?: string;
+  lang?: Language;
 }) {
   const { c } = useTheme();
   const { width: winWidth } = useWindowDimensions();
@@ -153,7 +160,7 @@ export function GroupedBarChart({
                 fill={c.muted}
                 textAnchor="end"
               >
-                {formatAxisLabel(maxVal * t).replace('Rp ', '')}
+                {formatAxisLabel(maxVal * t, lang).replace('Rp ', '')}
               </SvgText>
             </React.Fragment>
           );
@@ -199,8 +206,8 @@ export function GroupedBarChart({
       </Svg>
 
       <View style={styles.legend}>
-        <LegendDot color="#10B981" label="Pemasukan" />
-        <LegendDot color="#F43F5E" label="Pengeluaran" />
+        <LegendDot color="#10B981" label={incomeLabel} />
+        <LegendDot color="#F43F5E" label={expenseLabel} />
       </View>
     </View>
   );
@@ -227,13 +234,15 @@ export interface HBarItem {
   sublabel?: string;
 }
 
-export function HBarList({ items }: { items: HBarItem[] }) {
+export function HBarList({ items, emptyText }: { items: HBarItem[]; emptyText?: string }) {
   const { c } = useTheme();
 
   if (items.length === 0) {
     return (
       <View style={styles.empty}>
-        <Text style={{ fontSize: 12, color: c.muted }}>Belum ada budget aktif. Buat di menu Budget.</Text>
+        <Text style={{ fontSize: 12, color: c.muted }}>
+          {emptyText || 'Belum ada budget aktif. Buat di menu Budget.'}
+        </Text>
       </View>
     );
   }

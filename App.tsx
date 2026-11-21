@@ -18,6 +18,7 @@ import { FontAwesome6 } from '@expo/vector-icons';
 
 import { AppProvider, TabKey, useApp } from './src/state/AppContext';
 import { ThemeProvider, useTheme } from './src/state/ThemeContext';
+import { LanguageProvider, useLanguage } from './src/state/LanguageContext';
 import { SplashView, ErrorView } from './src/components/Splash';
 import { LockScreen } from './src/components/LockScreen';
 import { ToastHost } from './src/components/Toast';
@@ -40,14 +41,6 @@ import { formatCurrency } from './src/lib/utils';
 import { getTotalBalance } from './src/lib/selectors';
 import { isPinEnabled, touchActivity } from './src/lib/auth';
 
-const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: 'gauge' },
-  { key: 'transaksi', label: 'Transaksi', icon: 'receipt' },
-  { key: 'budget', label: 'Budget', icon: 'bullseye' },
-  { key: 'laporan', label: 'Laporan', icon: 'chart-simple' },
-  { key: 'pengaturan', label: 'Pengaturan', icon: 'gear' },
-];
-
 function Shell() {
   const {
     ready,
@@ -63,7 +56,19 @@ function Shell() {
     locked,
   } = useApp();
   const { c, isDark } = useTheme();
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
+
+  const tabs: { key: TabKey; label: string; icon: string }[] = useMemo(
+    () => [
+      { key: 'dashboard', label: t.tabs.dashboard, icon: 'gauge' },
+      { key: 'transaksi', label: t.tabs.transaksi, icon: 'receipt' },
+      { key: 'budget', label: t.tabs.budget, icon: 'bullseye' },
+      { key: 'laporan', label: t.tabs.laporan, icon: 'chart-simple' },
+      { key: 'pengaturan', label: t.tabs.pengaturan, icon: 'gear' },
+    ],
+    [t]
+  );
 
   // --- Kunci aplikasi (Android): kembali ke Dashboard dulu, baru keluar ---
   useEffect(() => {
@@ -91,10 +96,10 @@ function Shell() {
       if (await isPinEnabled()) {
         lock();
       } else {
-        showToast('Atur PIN dulu di menu Pengaturan untuk mengunci aplikasi', 'info');
+        showToast(t.header.lockHint, 'info');
       }
     } catch {
-      showToast('Gagal memeriksa status PIN', 'error');
+      showToast(t.header.lockCheckFailed, 'error');
     }
   };
 
@@ -139,13 +144,13 @@ function Shell() {
             <View style={styles.headerBrand}>
               <Text style={styles.headerEmoji}>💰</Text>
               <View>
-                <Text style={[styles.headerTitle, { color: c.text }]}>Keuangan Keluarga</Text>
-                <Text style={[styles.headerSub, { color: c.muted }]}>Akuntansi Rumah Tangga</Text>
+                <Text style={[styles.headerTitle, { color: c.text }]}>{t.header.appTitle}</Text>
+                <Text style={[styles.headerSub, { color: c.muted }]}>{t.header.appSubtitle}</Text>
               </View>
             </View>
             <View style={styles.headerRight}>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[styles.headerSaldoLabel, { color: c.muted }]}>Total Saldo</Text>
+                <Text style={[styles.headerSaldoLabel, { color: c.muted }]}>{t.header.totalBalance}</Text>
                 <Text style={[styles.headerSaldo, { color: c.primary }]} numberOfLines={1}>
                   {formatCurrency(totalBalance)}
                 </Text>
@@ -210,12 +215,12 @@ function Shell() {
               },
             ]}
           >
-            {TABS.map((t) => {
-              const active = tab === t.key;
+            {tabs.map((tabItem) => {
+              const active = tab === tabItem.key;
               return (
                 <Pressable
-                  key={t.key}
-                  onPress={() => setTab(t.key)}
+                  key={tabItem.key}
+                  onPress={() => setTab(tabItem.key)}
                   style={styles.navItem}
                   hitSlop={4}
                 >
@@ -226,7 +231,7 @@ function Shell() {
                     ]}
                   />
                   <FontAwesome6
-                    name={t.icon as any}
+                    name={tabItem.icon as any}
                     solid
                     size={17}
                     color={active ? c.primary : c.muted}
@@ -238,7 +243,7 @@ function Shell() {
                     ]}
                     numberOfLines={1}
                   >
-                    {t.label}
+                    {tabItem.label}
                   </Text>
                 </Pressable>
               );
@@ -272,11 +277,13 @@ function Shell() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AppProvider>
-        <ThemeProvider>
-          <Shell />
-        </ThemeProvider>
-      </AppProvider>
+      <LanguageProvider>
+        <AppProvider>
+          <ThemeProvider>
+            <Shell />
+          </ThemeProvider>
+        </AppProvider>
+      </LanguageProvider>
     </SafeAreaProvider>
   );
 }

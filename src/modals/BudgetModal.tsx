@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { useApp } from '../state/AppContext';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { ModalSheet } from '../components/ModalSheet';
 import {
   AppTextInput,
@@ -26,6 +27,7 @@ type Period = 'daily' | 'weekly' | 'monthly';
 export function BudgetModal() {
   const { modal, closeModal, snap, refresh, showToast } = useApp();
   const { c } = useTheme();
+  const { t, language } = useLanguage();
 
   const editingId = modal?.key === 'budget' ? modal.param : null;
   const existing = editingId ? snap.budgets.find((b) => b.id === editingId) : null;
@@ -47,7 +49,7 @@ export function BudgetModal() {
   const expenseCategories = snap.categories.filter((cat) => cat.type === 'expense');
 
   const categoryOptions = [
-    { value: '', label: 'Semua pengeluaran (global)' },
+    { value: '', label: t.budgetModal.allExpensesGlobal },
     ...expenseCategories.map((cat) => ({
       value: String(cat.id),
       label: cat.name,
@@ -71,8 +73,8 @@ export function BudgetModal() {
 
   const submit = async () => {
     const amount = parseAmount(amountText);
-    if (!name.trim()) return showToast('Nama budget harus diisi', 'warning');
-    if (!(amount > 0)) return showToast('Batas budget harus lebih dari 0', 'warning');
+    if (!name.trim()) return showToast(t.budgetModal.nameWarning, 'warning');
+    if (!(amount > 0)) return showToast(t.budgetModal.limitWarning, 'warning');
 
     const payload: BudgetPayload = {
       name: name.trim(),
@@ -88,10 +90,10 @@ export function BudgetModal() {
       if (editingId) await updateBudget(editingId, payload);
       else await addBudget(payload);
       await refresh();
-      showToast(editingId ? 'Budget diperbarui' : 'Budget dibuat', 'success');
+      showToast(editingId ? t.budgetModal.updatedSuccess : t.budgetModal.savedSuccess, 'success');
       closeModal();
     } catch (err: any) {
-      showToast('Gagal menyimpan budget: ' + (err?.message || String(err)), 'error');
+      showToast(t.budgetModal.saveFailed + ': ' + (err?.message || String(err)), 'error');
     } finally {
       setSaving(false);
     }
@@ -100,21 +102,21 @@ export function BudgetModal() {
   return (
     <ModalSheet
       visible={modal?.key === 'budget'}
-      title={editingId ? 'Edit Budget' : 'Buat Budget'}
+      title={editingId ? t.budgetModal.editTitle : t.budgetModal.addTitle}
       onClose={closeModal}
       maxWidth={440}
     >
       <View style={{ gap: 6 }}>
-        <FieldLabel>Nama Budget</FieldLabel>
+        <FieldLabel>{t.budgetModal.nameLabel}</FieldLabel>
         <AppTextInput
           value={name}
           onChangeText={setName}
-          placeholder="Contoh: Jajan Harian, Belanja Dapur"
+          placeholder={language === 'en' ? 'E.g., Daily Snacks, Groceries' : 'Contoh: Jajan Harian, Belanja Dapur'}
         />
       </View>
 
       <View style={{ gap: 6 }}>
-        <FieldLabel>Periode</FieldLabel>
+        <FieldLabel>{t.budgetModal.periodLabel}</FieldLabel>
         <SegmentedControl<Period>
           value={period}
           onChange={handlePeriodChange}
@@ -122,36 +124,42 @@ export function BudgetModal() {
           activeSoft={c.primarySoft}
           columns={3}
           options={[
-            { value: 'daily', label: 'Harian', icon: 'sun' },
-            { value: 'weekly', label: 'Mingguan', icon: 'calendar-week' },
-            { value: 'monthly', label: 'Bulanan', icon: 'calendar-days' },
+            { value: 'daily', label: t.common.daily, icon: 'sun' },
+            { value: 'weekly', label: t.common.weekly, icon: 'calendar-week' },
+            { value: 'monthly', label: t.common.monthly, icon: 'calendar-days' },
           ]}
         />
         <Text style={{ fontSize: 11, color: c.muted }}>
-          Otomatis berulang: harian = per hari, mingguan = Senin–Minggu, bulanan = per bulan kalender.
+          {language === 'en'
+            ? 'Repeats automatically: daily = per day, weekly = Mon–Sun, monthly = per calendar month.'
+            : 'Otomatis berulang: harian = per hari, mingguan = Senin–Minggu, bulanan = per bulan kalender.'}
         </Text>
       </View>
 
       <View style={{ gap: 6 }}>
-        <FieldLabel>Batas Budget (Rp)</FieldLabel>
+        <FieldLabel>{language === 'en' ? 'Budget Limit (Rp)' : 'Batas Budget (Rp)'}</FieldLabel>
         <NumberInput value={amountText} onValueChange={setAmountText} placeholder="0" />
       </View>
 
       <SelectField
-        label="Cakupan"
+        label={language === 'en' ? 'Scope' : 'Cakupan'}
         value={categoryId}
         options={categoryOptions}
         onChange={handleCategoryChange}
-        placeholder="Semua pengeluaran (global)"
+        placeholder={t.budgetModal.allExpensesGlobal}
         allowEmpty
       />
 
       <IconPicker value={icon || periodIcon(period)} onChange={setIcon} />
 
-      <CheckRow label="Budget aktif" checked={active} onChange={setActive} />
+      <CheckRow
+        label={language === 'en' ? 'Budget active' : 'Budget aktif'}
+        checked={active}
+        onChange={setActive}
+      />
 
       <PrimaryButton
-        label={editingId ? 'Perbarui Budget' : 'Simpan Budget'}
+        label={editingId ? (language === 'en' ? 'Update Budget' : 'Perbarui Budget') : t.budgetModal.saveBtn}
         onPress={submit}
         loading={saving}
       />

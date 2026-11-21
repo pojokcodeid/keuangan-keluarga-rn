@@ -7,10 +7,11 @@
 // 3. Seluruh database / reset pabrik (termasuk PIN & pengaturan keamanan)
 // =============================================================================
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { ModalSheet } from './ModalSheet';
 import { AppTextInput, FieldLabel, PrimaryButton } from './form';
 import { ResetScope, resetData } from '../lib/db';
@@ -32,32 +33,36 @@ interface ScopeOption {
   icon: string;
 }
 
-const OPTIONS: ScopeOption[] = [
-  {
-    value: 'transactions',
-    title: 'Transaksi & Budget Saja',
-    desc: 'Hapus semua transaksi, budget, dan foto lampiran. Akun, kategori, dan PIN tetap aman.',
-    icon: 'receipt',
-  },
-  {
-    value: 'all',
-    title: 'Semua Data Keuangan',
-    desc: 'Hapus transaksi, budget, akun, kategori, dan lampiran. PIN & pengaturan tetap aman.',
-    icon: 'layer-group',
-  },
-  {
-    value: 'database',
-    title: 'Seluruh Database (Reset Pabrik)',
-    desc: 'Hapus semua data, PIN, dan pengaturan keamanan. Aplikasi kembali seperti baru terpasang.',
-    icon: 'triangle-exclamation',
-  },
-];
-
 export function ResetDataSheet({ visible, onClose, onDone, onError }: Props) {
   const { c } = useTheme();
+  const { t, language } = useLanguage();
   const [scope, setScope] = useState<ResetScope>('transactions');
   const [confirmText, setConfirmText] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const options: ScopeOption[] = useMemo(
+    () => [
+      {
+        value: 'transactions',
+        title: t.resetSheet.scopeTransactionsTitle,
+        desc: t.resetSheet.scopeTransactionsDesc,
+        icon: 'receipt',
+      },
+      {
+        value: 'all',
+        title: t.resetSheet.scopeAllTitle,
+        desc: t.resetSheet.scopeAllDesc,
+        icon: 'layer-group',
+      },
+      {
+        value: 'database',
+        title: t.resetSheet.scopeDatabaseTitle,
+        desc: t.resetSheet.scopeDatabaseDesc,
+        icon: 'triangle-exclamation',
+      },
+    ],
+    [t]
+  );
 
   const confirmed = confirmText.trim().toUpperCase() === 'RESET';
 
@@ -77,33 +82,35 @@ export function ResetDataSheet({ visible, onClose, onDone, onError }: Props) {
       if (scope === 'database') await clearAuthSettings();
       const message =
         scope === 'transactions'
-          ? 'Semua transaksi & budget berhasil dihapus'
+          ? t.resetSheet.doneTransactions
           : scope === 'all'
-          ? 'Semua data keuangan berhasil dihapus'
-          : 'Database direset total — aplikasi seperti baru';
+          ? t.resetSheet.doneAll
+          : t.resetSheet.doneDatabase;
       setConfirmText('');
       setScope('transactions');
       onClose();
       await onDone(message);
     } catch (err: any) {
-      onError('Gagal mereset data: ' + (err?.message || String(err)));
+      onError(t.resetSheet.resetFailed + ': ' + (err?.message || String(err)));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <ModalSheet visible={visible} title="Reset Data" onClose={handleClose} maxWidth={440}>
+    <ModalSheet visible={visible} title={t.resetSheet.title} onClose={handleClose} maxWidth={440}>
       <View style={[styles.warn, { backgroundColor: c.dangerSoft }]}>
         <FontAwesome6 name="triangle-exclamation" solid size={15} color={c.danger} />
         <Text style={[styles.warnText, { color: c.text }]}>
-          Reset tidak dapat dibatalkan. Disarankan membuat backup terlebih dahulu.
+          {language === 'en'
+            ? 'Reset cannot be undone. We recommend creating a backup first.'
+            : 'Reset tidak dapat dibatalkan. Disarankan membuat backup terlebih dahulu.'}
         </Text>
       </View>
 
       <View style={{ gap: 8 }}>
-        <FieldLabel>Pilih Cakupan Reset</FieldLabel>
-        {OPTIONS.map((opt) => {
+        <FieldLabel>{language === 'en' ? 'Select Reset Scope' : 'Pilih Cakupan Reset'}</FieldLabel>
+        {options.map((opt) => {
           const active = opt.value === scope;
           const danger = opt.value === 'database';
           return (
@@ -145,7 +152,7 @@ export function ResetDataSheet({ visible, onClose, onDone, onError }: Props) {
       </View>
 
       <View style={{ gap: 6 }}>
-        <FieldLabel>Ketik RESET untuk mengonfirmasi</FieldLabel>
+        <FieldLabel>{t.resetSheet.confirmPrompt}</FieldLabel>
         <AppTextInput
           value={confirmText}
           onChangeText={setConfirmText}
@@ -156,7 +163,7 @@ export function ResetDataSheet({ visible, onClose, onDone, onError }: Props) {
       </View>
 
       <PrimaryButton
-        label="Hapus Data Sekarang"
+        label={t.resetSheet.submitBtn}
         icon="trash-can"
         color={c.danger}
         disabled={!confirmed}

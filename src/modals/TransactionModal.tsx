@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApp } from '../state/AppContext';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { ModalSheet } from '../components/ModalSheet';
 import {
   AppTextInput,
@@ -41,6 +42,7 @@ type TxDraft = {
 export function TransactionModal() {
   const { modal, closeModal, snap, refresh, showToast, openModal, confirm } = useApp();
   const { c } = useTheme();
+  const { t, language } = useLanguage();
 
   const editingId = modal?.key === 'transaction' ? modal.param : null;
   const existing = editingId ? snap.transactions.find((t) => t.id === editingId) : null;
@@ -124,10 +126,10 @@ export function TransactionModal() {
     });
   }, [type, date, categoryId, amountText, snap, editingId]);
 
-  const handleTypeChange = (t: TxType) => {
-    setType(t);
+  const handleTypeChange = (tVal: TxType) => {
+    setType(tVal);
     setCategoryId('');
-    if (t !== 'transfer') setToAccountId('');
+    if (tVal !== 'transfer') setToAccountId('');
   };
 
   const submit = async () => {
@@ -136,14 +138,14 @@ export function TransactionModal() {
     const toId = toAccountId ? parseInt(toAccountId, 10) : null;
     const catId = categoryId ? parseInt(categoryId, 10) : null;
 
-    if (!amount || amount <= 0) return showToast('Nominal transaksi harus lebih dari 0', 'warning');
-    if (!date) return showToast('Pilih tanggal transaksi', 'warning');
-    if (!accId) return showToast('Pilih akun', 'warning');
+    if (!amount || amount <= 0) return showToast(t.txModal.amountWarning, 'warning');
+    if (!date) return showToast(language === 'en' ? 'Select transaction date' : 'Pilih tanggal transaksi', 'warning');
+    if (!accId) return showToast(t.txModal.accountWarning, 'warning');
     if (type === 'transfer') {
-      if (!toId) return showToast('Pilih akun tujuan untuk transfer', 'warning');
-      if (accId === toId) return showToast('Akun asal dan akun tujuan tidak boleh sama', 'warning');
+      if (!toId) return showToast(t.txModal.toAccountWarning, 'warning');
+      if (accId === toId) return showToast(t.txModal.sameAccountWarning, 'warning');
     } else if (!catId) {
-      return showToast('Pilih kategori transaksi', 'warning');
+      return showToast(t.txModal.categoryWarning, 'warning');
     }
 
     const payload: TransactionPayload = {
@@ -162,7 +164,7 @@ export function TransactionModal() {
       if (editingId) await updateTransaction(editingId, payload);
       else await addTransaction(payload);
       await refresh();
-      showToast(editingId ? 'Transaksi berhasil diperbarui' : 'Transaksi berhasil dicatat', 'success');
+      showToast(editingId ? t.txModal.updatedSuccess : t.txModal.savedSuccess, 'success');
       close();
 
       // Peringatan budget setelah pengeluaran tersimpan
@@ -171,11 +173,22 @@ export function TransactionModal() {
           (b) => b.percentage >= 75
         );
         const over = hit.filter((b) => b.percentage >= 100);
-        if (over.length) showToast('Budget terlampaui: ' + over.map((b) => b.name).join(', '), 'warning');
-        else if (hit.length) showToast('Budget hampir habis: ' + hit.map((b) => b.name).join(', '), 'warning');
+        if (over.length) {
+          showToast(
+            (language === 'en' ? 'Budget exceeded: ' : 'Budget terlampaui: ') +
+              over.map((b) => b.name).join(', '),
+            'warning'
+          );
+        } else if (hit.length) {
+          showToast(
+            (language === 'en' ? 'Budget near limit: ' : 'Budget hampir habis: ') +
+              hit.map((b) => b.name).join(', '),
+            'warning'
+          );
+        }
       }
     } catch (err: any) {
-      showToast('Gagal menyimpan transaksi: ' + (err?.message || String(err)), 'error');
+      showToast(t.txModal.saveFailed + ': ' + (err?.message || String(err)), 'error');
     } finally {
       setSaving(false);
     }
@@ -183,35 +196,36 @@ export function TransactionModal() {
 
   const handleDelete = async () => {
     if (!editingId) return;
-    const ok = await confirm(
-      'Hapus Transaksi',
-      'Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini tidak dapat dibatalkan.'
-    );
+    const ok = await confirm(t.txModal.deleteConfirmTitle, t.txModal.deleteConfirmMsg);
     if (!ok) return;
 
     setSaving(true);
     try {
       await deleteTransaction(editingId);
       await refresh();
-      showToast('Transaksi berhasil dihapus', 'info');
+      showToast(t.txModal.deletedSuccess, 'info');
       close();
     } catch (err: any) {
-      showToast('Gagal menghapus transaksi: ' + (err?.message || String(err)), 'error');
+      showToast(t.txModal.deleteFailed + ': ' + (err?.message || String(err)), 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  const periodLabel: Record<string, string> = { daily: 'Harian', weekly: 'Mingguan', monthly: 'Bulanan' };
+  const getPeriodLabel = (periodType: string) => {
+    if (periodType === 'daily') return t.common.daily;
+    if (periodType === 'weekly') return t.common.weekly;
+    return t.common.monthly;
+  };
 
   return (
     <ModalSheet
       visible={modal?.key === 'transaction'}
-      title={editingId ? 'Edit Transaksi' : 'Tambah Transaksi'}
+      title={editingId ? t.txModal.editTitle : t.txModal.addTitle}
       onClose={close}
     >
       <View style={{ gap: 6 }}>
-        <FieldLabel>Jenis Transaksi</FieldLabel>
+        <FieldLabel>{language === 'en' ? 'Transaction Type' : 'Jenis Transaksi'}</FieldLabel>
         <SegmentedControl<TxType>
           value={type}
           onChange={handleTypeChange}
@@ -220,66 +234,70 @@ export function TransactionModal() {
             type === 'income' ? c.successSoft : type === 'expense' ? c.dangerSoft : c.infoSoft
           }
           options={[
-            { value: 'expense', label: 'Pengeluaran', icon: 'arrow-up' },
-            { value: 'income', label: 'Pemasukan', icon: 'arrow-down' },
-            { value: 'transfer', label: 'Transfer', icon: 'right-left' },
+            { value: 'expense', label: t.common.expense, icon: 'arrow-up' },
+            { value: 'income', label: t.common.income, icon: 'arrow-down' },
+            { value: 'transfer', label: t.common.transfer, icon: 'right-left' },
           ]}
         />
       </View>
 
       <View style={{ gap: 6 }}>
-        <FieldLabel>Jumlah (Rp)</FieldLabel>
+        <FieldLabel>{language === 'en' ? 'Amount (Rp)' : 'Jumlah (Rp)'}</FieldLabel>
         <NumberInput value={amountText} onValueChange={setAmountText} placeholder="0" />
       </View>
 
-      <DateField label="Tanggal" value={date} onChange={setDate} />
+      <DateField label={t.txModal.dateLabel} value={date} onChange={setDate} />
 
       <SelectField
-        label={type === 'transfer' ? 'Akun Asal' : 'Akun'}
+        label={type === 'transfer' ? t.txModal.fromAccountLabel : t.txModal.accountLabel}
         value={accountId}
         options={accountOptions}
         onChange={setAccountId}
-        placeholder="Pilih Akun"
+        placeholder={t.txModal.selectAccountPlaceholder}
       />
 
       {type === 'transfer' ? (
         <SelectField
-          label="Ke Akun"
+          label={t.txModal.toAccountLabel}
           value={toAccountId}
           options={accountOptions}
           onChange={setToAccountId}
-          placeholder="Pilih Akun Tujuan"
+          placeholder={language === 'en' ? 'Select Destination Account' : 'Pilih Akun Tujuan'}
         />
       ) : null}
 
       {type !== 'transfer' ? (
         <SelectField
-          label="Kategori"
+          label={t.txModal.categoryLabel}
           value={categoryId}
           options={categoryOptions}
           onChange={setCategoryId}
-          placeholder="Pilih Kategori"
+          placeholder={t.txModal.selectCategoryPlaceholder}
         />
       ) : null}
 
       {budgetImpact.length > 0 ? (
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 12, fontWeight: '600', color: c.subtext }}>
-            ▢ Dampak ke budget
+            {language === 'en' ? '▢ Budget Impact' : '▢ Dampak ke budget'}
           </Text>
           {budgetImpact.map((b) => {
             const pct = Math.round(b.percentage);
             const over = pct >= 100;
             const warn = pct >= 75;
-            const t = tone(pct);
+            const toneData = tone(pct);
             const frame = over
               ? { borderColor: 'rgba(244,63,94,.35)', backgroundColor: c.dangerSoft }
               : warn
               ? { borderColor: 'rgba(245,158,11,.35)', backgroundColor: c.warningSoft }
               : { borderColor: c.inputBorder, backgroundColor: c.cardAlt };
             const msg = over
-              ? `Melebihi budget ${formatCurrency(-b.remaining)}`
-              : `Sisa ${formatCurrency(b.remaining)}`;
+              ? (language === 'en'
+                  ? `Over budget by ${formatCurrency(-b.remaining)}`
+                  : `Melebihi budget ${formatCurrency(-b.remaining)}`)
+              : (language === 'en'
+                  ? `Remaining ${formatCurrency(b.remaining)}`
+                  : `Sisa ${formatCurrency(b.remaining)}`);
             return (
               <View
                 key={b.id}
@@ -289,14 +307,14 @@ export function TransactionModal() {
                   <View style={styles.budgetName}>
                     <IconBadge icon={resolveBudgetIcon(b)} size={22} />
                     <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '700', color: c.text, flexShrink: 1 }}>
-                      {b.name} <Text style={{ fontWeight: '400', color: c.muted }}>· {periodLabel[b.period_type]}</Text>
+                      {b.name} <Text style={{ fontWeight: '400', color: c.muted }}>· {getPeriodLabel(b.period_type)}</Text>
                     </Text>
                   </View>
                   <Text style={{ fontSize: 12, fontWeight: '800', color: over ? c.danger : warn ? c.warning : c.success }}>
                     {pct}%
                   </Text>
                 </View>
-                <ProgressBar percent={pct} height={8} gradientColors={[t.c1, t.c2]} />
+                <ProgressBar percent={pct} height={8} gradientColors={[toneData.c1, toneData.c2]} />
                 <Text style={{ fontSize: 11, color: c.subtext }}>
                   {formatCurrency(b.after)} / {formatCurrency(b.amount_limit)} · {msg}
                 </Text>
@@ -307,11 +325,11 @@ export function TransactionModal() {
       ) : null}
 
       <View style={{ gap: 6 }}>
-        <FieldLabel>Catatan (opsional)</FieldLabel>
+        <FieldLabel>{t.txModal.noteLabel}</FieldLabel>
         <AppTextInput
           value={note}
           onChangeText={setNote}
-          placeholder="Tambahkan catatan..."
+          placeholder={language === 'en' ? 'Add a note...' : 'Tambahkan catatan...'}
           multiline
           numberOfLines={2}
           style={{ minHeight: 60, textAlignVertical: 'top' }}
@@ -323,15 +341,15 @@ export function TransactionModal() {
         onChange={setAttachmentUri}
         label={
           type === 'income'
-            ? 'Foto Bukti Pemasukan (opsional)'
+            ? (language === 'en' ? 'Income Proof Photo (optional)' : 'Foto Bukti Pemasukan (opsional)')
             : type === 'expense'
-            ? 'Foto Struk / Bukti Pengeluaran (opsional)'
-            : 'Foto Bukti Transfer (opsional)'
+            ? (language === 'en' ? 'Receipt / Expense Proof Photo (optional)' : 'Foto Struk / Bukti Pengeluaran (opsional)')
+            : (language === 'en' ? 'Transfer Proof Photo (optional)' : 'Foto Bukti Transfer (opsional)')
         }
       />
 
       <PrimaryButton
-        label={editingId ? 'Perbarui Transaksi' : 'Simpan Transaksi'}
+        label={editingId ? t.txModal.updateBtn : t.txModal.saveBtn}
         onPress={submit}
         loading={saving}
       />
@@ -345,13 +363,13 @@ export function TransactionModal() {
             }}
             style={{ fontSize: 13, color: c.primary, fontWeight: '700' }}
           >
-            + Transaksi Baru
+            {language === 'en' ? '+ New Transaction' : '+ Transaksi Baru'}
           </Text>
           <Text
             onPress={handleDelete}
             style={{ fontSize: 13, color: c.danger, fontWeight: '700' }}
           >
-            Hapus Transaksi
+            {t.txModal.deleteBtn}
           </Text>
         </View>
       ) : null}

@@ -7,6 +7,7 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useApp } from '../state/AppContext';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { Card, EmptyState } from '../components/ui';
 import { TransactionRowItem } from '../components/TransactionRow';
 import { MonthField } from '../components/DatePickers';
@@ -18,6 +19,7 @@ import { currentYearMonthISO, formatDateGroup, formatCurrency } from '../lib/uti
 export function TransaksiScreen() {
   const { snap, openModal } = useApp();
   const { c } = useTheme();
+  const { t, language } = useLanguage();
 
   const [monthStr, setMonthStr] = useState(currentYearMonthISO());
   const [accountId, setAccountId] = useState('');
@@ -34,10 +36,10 @@ export function TransaksiScreen() {
     () =>
       snap.categories.map((cat) => ({
         value: String(cat.id),
-        label: `${cat.name} (${cat.type === 'income' ? 'Masuk' : 'Keluar'})`,
+        label: `${cat.name} (${cat.type === 'income' ? t.transaksi.inLabel : t.transaksi.outLabel})`,
         icon: <FaIcon icon={cat.icon} size={14} />,
       })),
-    [snap.categories]
+    [snap.categories, t]
   );
 
   const [y, m] = monthStr.split('-').map(Number);
@@ -56,26 +58,26 @@ export function TransaksiScreen() {
       <Card style={styles.filterCard}>
         <View style={styles.filterGrid}>
           <View style={styles.filterCol}>
-            <Text style={[styles.filterLabel, { color: c.subtext }]}>Bulan</Text>
+            <Text style={[styles.filterLabel, { color: c.subtext }]}>{t.transaksi.filterMonth}</Text>
             <MonthField value={monthStr} onChange={setMonthStr} />
           </View>
           <View style={styles.filterCol}>
             <SelectField
-              label="Akun"
+              label={t.transaksi.filterAccount}
               value={accountId}
               options={accountOptions}
               onChange={setAccountId}
-              placeholder="Semua Akun"
+              placeholder={t.transaksi.allAccounts}
               allowEmpty
             />
           </View>
           <View style={styles.filterCol}>
             <SelectField
-              label="Kategori"
+              label={t.transaksi.filterCategory}
               value={categoryId}
               options={categoryOptions}
               onChange={setCategoryId}
-              placeholder="Semua Kategori"
+              placeholder={t.transaksi.allCategories}
               allowEmpty
             />
           </View>
@@ -87,8 +89,8 @@ export function TransaksiScreen() {
         <Card>
           <EmptyState
             icon="inbox"
-            title="Tidak ada transaksi ditemukan"
-            subtitle="Coba sesuaikan filter atau tambahkan transaksi baru"
+            title={t.transaksi.noTransactionsTitle}
+            subtitle={t.transaksi.noTransactionsSub}
           />
         </Card>
       ) : (
@@ -96,7 +98,7 @@ export function TransaksiScreen() {
           {groups.map((g) => (
             <Card key={g.date}>
               <View style={[styles.groupHead, { backgroundColor: c.cardAlt, borderBottomColor: c.border }]}>
-                <Text style={[styles.groupLabel, { color: c.text }]}>{formatDateGroup(g.date)}</Text>
+                <Text style={[styles.groupLabel, { color: c.text }]}>{formatDateGroup(g.date, language)}</Text>
                 <View style={styles.groupTotals}>
                   {g.dailyIncome > 0 ? (
                     <Text style={[styles.groupIncome, { color: c.success }]}>

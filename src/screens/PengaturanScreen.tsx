@@ -3,11 +3,13 @@
 // Port dari renderSettings() di js/ui.js
 // =============================================================================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, Alert } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useApp } from '../state/AppContext';
 import { useTheme, ThemeMode } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
+import { Language } from '../i18n/translations';
 import { ActionRow, Card, Chip, IconBtn, SectionTitle } from '../components/ui';
 import { SegmentedControl, SelectField } from '../components/form';
 import { ResetDataSheet } from '../components/ResetDataSheet';
@@ -20,13 +22,6 @@ import { backupDatabase, backupDatabaseSqlite, restoreDatabase } from '../lib/ba
 import { exportToExcel } from '../lib/excel';
 
 type CatTab = 'income' | 'expense';
-
-const AUTOLOCK_OPTIONS = [
-  { value: 'immediate', label: 'Segera saat aplikasi ditutup' },
-  { value: '5', label: 'Setelah 5 menit tidak aktif' },
-  { value: '15', label: 'Setelah 15 menit tidak aktif' },
-  { value: 'never', label: 'Jangan kunci otomatis' },
-];
 
 const accountIcon = (type: string): string => {
   if (type === 'bank') return 'fa-solid fa-building-columns|#3B82F6';
@@ -45,12 +40,23 @@ export function PengaturanScreen() {
     lock,
   } = useApp();
   const { c, mode, setMode } = useTheme();
+  const { t, language, setLanguage, interpolate } = useLanguage();
 
   const [pinOn, setPinOn] = useState(false);
   const [autolock, setAutolock] = useState('immediate');
   const [catTab, setCatTab] = useState<CatTab>('expense');
   const [busy, setBusy] = useState<string | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
+
+  const autolockOptions = useMemo(
+    () => [
+      { value: 'immediate', label: t.pengaturan.autolockImmediate },
+      { value: '5', label: t.pengaturan.autolock5m },
+      { value: '15', label: t.pengaturan.autolock15m },
+      { value: 'never', label: t.pengaturan.autolockNever },
+    ],
+    [t]
+  );
 
   // Muat status PIN & pengaturan auto-lock (asinkron, tanpa reset sinkron)
   useEffect(() => {
@@ -74,7 +80,7 @@ export function PengaturanScreen() {
   const handleAutolock = async (v: string) => {
     setAutolock(v);
     await setAutolockSetting(v);
-    showToast('Pengaturan kunci otomatis disimpan', 'success');
+    showToast(t.pengaturan.autolockSaved, 'success');
   };
 
   const handleLockNow = async () => {
@@ -85,32 +91,32 @@ export function PengaturanScreen() {
   // --- Akun ---
   const handleDeleteAccount = async (id: number) => {
     const ok = await confirm(
-      'Hapus Akun',
-      'Apakah Anda yakin ingin menghapus akun ini? Akun yang memiliki riwayat transaksi tidak dapat dihapus.'
+      t.pengaturan.deleteAccountTitle,
+      t.pengaturan.deleteAccountConfirm
     );
     if (!ok) return;
     try {
       await deleteAccount(id, snap.transactions);
-      showToast('Akun berhasil dihapus', 'success');
+      showToast(t.pengaturan.accountDeletedSuccess, 'success');
       await refresh();
     } catch (err: any) {
-      showToast(err?.message || 'Gagal menghapus akun', 'error');
+      showToast(err?.message || t.pengaturan.accountDeleteFailed, 'error');
     }
   };
 
   // --- Kategori ---
   const handleDeleteCategory = async (id: number) => {
     const ok = await confirm(
-      'Hapus Kategori',
-      'Apakah Anda yakin ingin menghapus kategori ini? Kategori yang memiliki transaksi tidak dapat dihapus.'
+      t.pengaturan.deleteCategoryTitle,
+      t.pengaturan.deleteCategoryConfirm
     );
     if (!ok) return;
     try {
       await deleteCategory(id, snap.transactions);
-      showToast('Kategori berhasil dihapus', 'success');
+      showToast(t.pengaturan.categoryDeletedSuccess, 'success');
       await refresh();
     } catch (err: any) {
-      showToast(err?.message || 'Gagal menghapus kategori', 'error');
+      showToast(err?.message || t.pengaturan.categoryDeleteFailed, 'error');
     }
   };
 
@@ -123,16 +129,29 @@ export function PengaturanScreen() {
         const { photos } = await backupDatabase();
         showToast(
           photos > 0
-            ? `Backup lengkap dibuat (database + ${photos} foto)`
-            : 'Backup database berhasil dibuat',
+            ? (language === 'en'
+                ? `Complete backup created (database + ${photos} photos)`
+                : `Backup lengkap dibuat (database + ${photos} foto)`)
+            : (language === 'en'
+                ? 'Database backup created successfully'
+                : 'Backup database berhasil dibuat'),
           'success'
         );
       } else {
         await backupDatabaseSqlite();
-        showToast('Backup database SQLite berhasil dibuat', 'success');
+        showToast(
+          language === 'en'
+            ? 'SQLite database backup created successfully'
+            : 'Backup database SQLite berhasil dibuat',
+          'success'
+        );
       }
     } catch (err: any) {
-      showToast('Gagal membuat backup: ' + (err?.message || String(err)), 'error');
+      showToast(
+        (language === 'en' ? 'Failed to create backup: ' : 'Gagal membuat backup: ') +
+          (err?.message || String(err)),
+        'error'
+      );
     } finally {
       setBusy(null);
     }
@@ -141,12 +160,12 @@ export function PengaturanScreen() {
   const handleBackup = () => {
     if (busy) return;
     Alert.alert(
-      'Download Backup',
-      'Pilih format backup yang ingin dibuat.',
+      t.pengaturan.backupPromptTitle,
+      t.pengaturan.backupPromptMsg,
       [
-        { text: 'Lengkap (ZIP + Foto)', onPress: () => runBackup('zip') },
-        { text: 'Database Saja (.sqlite)', onPress: () => runBackup('sqlite') },
-        { text: 'Batal', style: 'cancel' },
+        { text: t.pengaturan.backupOptionZip, onPress: () => runBackup('zip') },
+        { text: t.pengaturan.backupOptionSqlite, onPress: () => runBackup('sqlite') },
+        { text: t.common.cancel, style: 'cancel' },
       ],
       { cancelable: true }
     );
@@ -155,8 +174,8 @@ export function PengaturanScreen() {
   const handleRestore = async () => {
     if (busy) return;
     const ok = await confirm(
-      'Restore Backup',
-      'Data saat ini (termasuk foto lampiran) akan ditimpa dengan isi file backup. Lanjutkan?'
+      t.pengaturan.restoreConfirmTitle,
+      t.pengaturan.restoreConfirmMsg
     );
     if (!ok) return;
     setBusy('restore');
@@ -166,13 +185,16 @@ export function PengaturanScreen() {
         await refresh();
         showToast(
           result.format === 'zip' && result.photos > 0
-            ? `Backup dipulihkan — ${result.photos} foto lampiran ikut dipulihkan`
-            : 'Database berhasil dipulihkan!',
+            ? interpolate(t.pengaturan.restoreSuccessZip, { count: result.photos })
+            : t.pengaturan.restoreSuccessSqlite,
           'success'
         );
       }
     } catch (err: any) {
-      showToast('Gagal memulihkan database: ' + (err?.message || String(err)), 'error');
+      showToast(
+        t.pengaturan.restoreFailed + ': ' + (err?.message || String(err)),
+        'error'
+      );
     } finally {
       setBusy(null);
     }
@@ -183,9 +205,12 @@ export function PengaturanScreen() {
     setBusy('excel');
     try {
       await exportToExcel(snap);
-      showToast('Laporan Excel berhasil dibagikan', 'success');
+      showToast(t.laporan.exportExcelSuccess, 'success');
     } catch (err: any) {
-      showToast('Gagal mengekspor Excel: ' + (err?.message || String(err)), 'error');
+      showToast(
+        t.laporan.exportExcelFailed + ': ' + (err?.message || String(err)),
+        'error'
+      );
     } finally {
       setBusy(null);
     }
@@ -209,15 +234,15 @@ export function PengaturanScreen() {
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       {/* ============================= Tampilan ============================= */}
       <View>
-        <SectionTitle icon="palette">Tampilan</SectionTitle>
+        <SectionTitle icon="palette">{t.pengaturan.appearanceTitle}</SectionTitle>
         <Card style={styles.block}>
-          <Text style={[styles.blockTitle, { color: c.text }]}>Tema Aplikasi</Text>
+          <Text style={[styles.blockTitle, { color: c.text }]}>{t.pengaturan.appTheme}</Text>
           <Text style={[styles.blockSub, { color: c.muted }]}>
             {mode === 'auto'
-              ? 'Mengikuti pengaturan sistem (Otomatis)'
+              ? t.pengaturan.themeAutoDesc
               : mode === 'dark'
-              ? 'Tema gelap aktif'
-              : 'Tema terang aktif'}
+              ? t.pengaturan.themeDarkDesc
+              : t.pengaturan.themeLightDesc}
           </Text>
           <SegmentedControl<ThemeMode>
             value={mode}
@@ -225,9 +250,27 @@ export function PengaturanScreen() {
             activeColor={c.primary}
             activeSoft={c.primarySoft}
             options={[
-              { value: 'light', label: 'Terang', icon: 'sun' },
-              { value: 'dark', label: 'Gelap', icon: 'moon' },
-              { value: 'auto', label: 'Otomatis', icon: 'desktop' },
+              { value: 'light', label: t.pengaturan.themeLight, icon: 'sun' },
+              { value: 'dark', label: t.pengaturan.themeDark, icon: 'moon' },
+              { value: 'auto', label: t.pengaturan.themeAuto, icon: 'desktop' },
+            ]}
+          />
+        </Card>
+
+        {/* Pilihan Bahasa Aplikasi */}
+        <Card style={[styles.block, { marginTop: 10 }]}>
+          <Text style={[styles.blockTitle, { color: c.text }]}>{t.pengaturan.appLanguage}</Text>
+          <Text style={[styles.blockSub, { color: c.muted }]}>
+            {language === 'id' ? t.pengaturan.langIdDesc : t.pengaturan.langEnDesc}
+          </Text>
+          <SegmentedControl<Language>
+            value={language}
+            onChange={setLanguage}
+            activeColor={c.primary}
+            activeSoft={c.primarySoft}
+            options={[
+              { value: 'id', label: t.pengaturan.langId, icon: 'globe' },
+              { value: 'en', label: t.pengaturan.langEn, icon: 'globe' },
             ]}
           />
         </Card>
@@ -235,32 +278,32 @@ export function PengaturanScreen() {
 
       {/* ============================ Keamanan ============================= */}
       <View>
-        <SectionTitle icon="shield-halved">Keamanan & Kunci Aplikasi</SectionTitle>
+        <SectionTitle icon="shield-halved">{t.pengaturan.securityTitle}</SectionTitle>
         <Card>
           <View style={[styles.secRow, { borderBottomColor: c.border }]}>
             <View style={[styles.secIcon, { backgroundColor: c.primarySoft }]}>
               <FontAwesome6 name="key" solid size={15} color={c.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.blockTitle, { color: c.text }]}>Proteksi PIN Keamanan</Text>
+              <Text style={[styles.blockTitle, { color: c.text }]}>{t.pengaturan.pinProtection}</Text>
               <Text
                 style={[
                   styles.blockSub,
                   { color: pinOn ? c.success : c.warning, fontWeight: '600' },
                 ]}
               >
-                {pinOn ? 'Aktif · Terlindungi PIN' : 'Nonaktif · Aplikasi Terbuka Bebas'}
+                {pinOn ? t.pengaturan.pinActive : t.pengaturan.pinInactive}
               </Text>
             </View>
             <View style={styles.secActions}>
               <PressableBtn
-                label={pinOn ? 'Ubah PIN' : 'Atur PIN'}
+                label={pinOn ? t.pengaturan.changePin : t.pengaturan.setPin}
                 color={c.primary}
                 onPress={() => openModal('setPin')}
               />
               {pinOn ? (
                 <PressableBtn
-                  label="Nonaktifkan"
+                  label={t.pengaturan.disablePin}
                   color={c.danger}
                   soft
                   onPress={() => openModal('disablePin')}
@@ -270,11 +313,11 @@ export function PengaturanScreen() {
           </View>
 
           <View style={[styles.secRow, styles.secCol, { borderBottomColor: c.border }]}>
-            <Text style={[styles.blockTitle, { color: c.text }]}>Kunci Otomatis (Auto-Lock)</Text>
+            <Text style={[styles.blockTitle, { color: c.text }]}>{t.pengaturan.autolockTitle}</Text>
             <Text style={[styles.blockSub, { color: c.muted }]}>
-              Kunci aplikasi setelah periode inaktivitas
+              {t.pengaturan.autolockSub}
             </Text>
-            <SelectField value={autolock} options={AUTOLOCK_OPTIONS} onChange={handleAutolock} />
+            <SelectField value={autolock} options={autolockOptions} onChange={handleAutolock} />
           </View>
 
           {pinOn ? (
@@ -282,8 +325,8 @@ export function PengaturanScreen() {
               icon="lock"
               iconBg={c.dangerSoft}
               iconColor={c.danger}
-              title="Kunci Aplikasi Sekarang"
-              subtitle="Kunci layar dan lindungi data pribadi"
+              title={t.pengaturan.lockNow}
+              subtitle={t.pengaturan.lockNowSub}
               rightColor={c.borderStrong}
               onPress={handleLockNow}
             />
@@ -296,14 +339,14 @@ export function PengaturanScreen() {
         <SectionTitle
           icon="landmark"
           action={
-            <SmallBtn label="+ Tambah Akun" onPress={() => openModal('account')} />
+            <SmallBtn label={t.pengaturan.addAccountBtn} onPress={() => openModal('account')} />
           }
         >
-          Akun & Dompet
+          {t.pengaturan.accountsTitle}
         </SectionTitle>
         <Card>
           {snap.accounts.length === 0 ? (
-            <Text style={[styles.emptyText, { color: c.muted }]}>Belum ada akun dompet atau rekening</Text>
+            <Text style={[styles.emptyText, { color: c.muted }]}>{t.pengaturan.noAccounts}</Text>
           ) : (
             snap.accounts.map((acc, i) => {
               const balance = getAccountBalance(snap.accounts, snap.transactions, acc.id);
@@ -321,7 +364,7 @@ export function PengaturanScreen() {
                       {acc.name}
                     </Text>
                     <Text style={[styles.blockSub, { color: c.muted }]}>
-                      Saldo:{' '}
+                      {t.pengaturan.balanceLabel}:{' '}
                       <Text style={{ color: c.primary, fontWeight: '700' }}>
                         {formatCurrency(balance)}
                       </Text>
@@ -340,9 +383,9 @@ export function PengaturanScreen() {
       <View>
         <SectionTitle
           icon="tags"
-          action={<SmallBtn label="+ Tambah Kategori" onPress={() => openModal('category', null, catTab)} />}
+          action={<SmallBtn label={t.pengaturan.addCategoryBtn} onPress={() => openModal('category', null, catTab)} />}
         >
-          Kategori
+          {t.pengaturan.categoriesTitle}
         </SectionTitle>
         <View style={[styles.tabWrap, { backgroundColor: c.card, borderColor: c.border }]}>
           <SegmentedControl<CatTab>
@@ -351,15 +394,17 @@ export function PengaturanScreen() {
             activeColor={catTab === 'income' ? c.success : c.danger}
             activeSoft={catTab === 'income' ? c.successSoft : c.dangerSoft}
             options={[
-              { value: 'income', label: 'Pemasukan', icon: 'arrow-trend-up' },
-              { value: 'expense', label: 'Pengeluaran', icon: 'arrow-trend-down' },
+              { value: 'income', label: t.common.income, icon: 'arrow-trend-up' },
+              { value: 'expense', label: t.common.expense, icon: 'arrow-trend-down' },
             ]}
           />
         </View>
         <Card style={{ marginTop: 10 }}>
           {categories.length === 0 ? (
             <Text style={[styles.emptyText, { color: c.muted }]}>
-              Belum ada kategori {catTab === 'income' ? 'pemasukan' : 'pengeluaran'}
+              {interpolate(t.pengaturan.noCategories, {
+                type: catTab === 'income' ? t.pengaturan.categoryIncome : t.pengaturan.categoryExpense,
+              })}
             </Text>
           ) : (
             categories.map((cat, i) => (
@@ -377,14 +422,14 @@ export function PengaturanScreen() {
                   </Text>
                   {cat.type === 'expense' && cat.budget_limit > 0 ? (
                     <Text style={[styles.blockSub, { color: c.muted }]}>
-                      Anggaran:{' '}
+                      {t.pengaturan.budgetLimitLabel}:{' '}
                       <Text style={{ color: c.subtext, fontWeight: '700' }}>
                         {formatCurrency(cat.budget_limit)}
                       </Text>
-                      /bln
+                      {t.pengaturan.perMonth}
                     </Text>
                   ) : (
-                    <Text style={[styles.blockSub, { color: c.borderStrong }]}>Tanpa batas anggaran</Text>
+                    <Text style={[styles.blockSub, { color: c.borderStrong }]}>{t.pengaturan.noBudgetLimit}</Text>
                   )}
                 </View>
                 <IconBtn name="pen-to-square" color={c.primary} onPress={() => openModal('category', cat.id)} />
@@ -397,17 +442,17 @@ export function PengaturanScreen() {
 
       {/* ========================== Data & Backup ========================== */}
       <View>
-        <SectionTitle icon="database">Data & Backup</SectionTitle>
+        <SectionTitle icon="database">{t.pengaturan.dataBackupTitle}</SectionTitle>
         <Card>
           <ActionRow
             icon="box-archive"
             iconBg={c.primarySoft}
             iconColor={c.primary}
-            title="Download Backup"
+            title={t.pengaturan.downloadBackupTitle}
             subtitle={
               busy === 'backup'
-                ? 'Menyiapkan backup…'
-                : 'Simpan database + semua foto lampiran (.zip)'
+                ? t.pengaturan.preparingBackup
+                : t.pengaturan.downloadBackupSub
             }
             onPress={handleBackup}
           />
@@ -416,9 +461,9 @@ export function PengaturanScreen() {
             icon="upload"
             iconBg={c.warningSoft}
             iconColor={c.warning}
-            title="Restore / Import Backup"
+            title={t.pengaturan.restoreBackupTitle}
             subtitle={
-              busy === 'restore' ? 'Memulihkan…' : 'Pulihkan data dari file .zip atau .sqlite'
+              busy === 'restore' ? t.pengaturan.restoringBackup : t.pengaturan.restoreBackupSub
             }
             onPress={handleRestore}
           />
@@ -427,8 +472,8 @@ export function PengaturanScreen() {
             icon="file-excel"
             iconBg={c.successSoft}
             iconColor={c.success}
-            title="Export ke Excel"
-            subtitle={busy === 'excel' ? 'Menyiapkan…' : 'Bagikan semua data dalam format .xlsx'}
+            title={t.pengaturan.exportExcelTitle}
+            subtitle={busy === 'excel' ? t.laporan.exporting : t.pengaturan.exportExcelSub}
             onPress={handleExcel}
           />
           <View style={[styles.hairline, { backgroundColor: c.border }]} />
@@ -436,9 +481,9 @@ export function PengaturanScreen() {
             icon="trash-can"
             iconBg={c.dangerSoft}
             iconColor={c.danger}
-            title="Reset Data"
+            title={t.pengaturan.resetDataTitle}
             titleColor={c.danger}
-            subtitle="Hapus transaksi, semua data, atau seluruh database"
+            subtitle={t.pengaturan.resetDataSub}
             onPress={() => setResetOpen(true)}
           />
         </Card>
@@ -446,12 +491,20 @@ export function PengaturanScreen() {
 
       {/* ============================ Info app ============================= */}
       <View style={styles.info}>
-        <Text style={[styles.blockSub, { color: c.muted }]}>Keuangan Keluarga v1.0</Text>
+        <Text style={[styles.blockSub, { color: c.muted }]}>{t.pengaturan.appVersion}</Text>
         <Text style={[styles.blockSub, { color: c.borderStrong }]}>
-          Data tersimpan di perangkat Anda (SQLite lokal)
+          {t.pengaturan.privacyNote}
         </Text>
         <View style={{ marginTop: 8 }}>
-          <Chip label={`${snap.transactions.length} transaksi · ${snap.accounts.length} akun`} color={c.subtext} icon="database" />
+          <Chip
+            label={
+              language === 'en'
+                ? `${snap.transactions.length} transactions · ${snap.accounts.length} accounts`
+                : `${snap.transactions.length} transaksi · ${snap.accounts.length} akun`
+            }
+            color={c.subtext}
+            icon="database"
+          />
         </View>
       </View>
 

@@ -7,10 +7,12 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useApp } from '../state/AppContext';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 
 export function ConfirmHost() {
   const { confirmState, resolveConfirm } = useApp();
   const { c } = useTheme();
+  const { t } = useLanguage();
 
   return (
     <Modal
@@ -33,13 +35,13 @@ export function ConfirmHost() {
               onPress={() => resolveConfirm(false)}
               style={[styles.btn, { backgroundColor: c.cardAlt, borderColor: c.borderStrong }]}
             >
-              <Text style={[styles.btnText, { color: c.subtext }]}>Batal</Text>
+              <Text style={[styles.btnText, { color: c.subtext }]}>{t.common.cancel}</Text>
             </Pressable>
             <Pressable
               onPress={() => resolveConfirm(true)}
               style={[styles.btn, { backgroundColor: '#e11d48' }]}
             >
-              <Text style={[styles.btnText, { color: '#fff' }]}>Ya, Lanjutkan</Text>
+              <Text style={[styles.btnText, { color: '#fff' }]}>{t.common.continue}</Text>
             </Pressable>
           </View>
         </View>

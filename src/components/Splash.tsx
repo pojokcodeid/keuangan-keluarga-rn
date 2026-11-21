@@ -6,36 +6,39 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { PrimaryButton } from './form';
 
 export function SplashView() {
   const { c } = useTheme();
+  const { t } = useLanguage();
   return (
     <View style={[styles.wrap, { backgroundColor: c.bg }]}>
       <View style={[styles.logo, { backgroundColor: c.primary }]}>
         <FontAwesome6 name="wallet" solid size={34} color="#fff" />
       </View>
-      <Text style={[styles.title, { color: c.text }]}>Keuangan Keluarga</Text>
-      <Text style={[styles.sub, { color: c.muted }]}>Akuntansi Rumah Tangga</Text>
+      <Text style={[styles.title, { color: c.text }]}>{t.splash.title}</Text>
+      <Text style={[styles.sub, { color: c.muted }]}>{t.splash.subtitle}</Text>
       <ActivityIndicator color={c.primary} style={{ marginTop: 24 }} />
-      <Text style={[styles.sub, { color: c.muted, marginTop: 8 }]}>Menyiapkan data…</Text>
+      <Text style={[styles.sub, { color: c.muted, marginTop: 8 }]}>{t.splash.preparingData}</Text>
     </View>
   );
 }
 
 export function ErrorView({ message, onRetry }: { message: string; onRetry: () => void }) {
   const { c } = useTheme();
+  const { t } = useLanguage();
   return (
     <View style={[styles.wrap, { backgroundColor: c.bg }]}>
       <View style={[styles.logo, { backgroundColor: c.dangerSoft }]}>
         <FontAwesome6 name="triangle-exclamation" solid size={32} color={c.danger} />
       </View>
-      <Text style={[styles.title, { color: c.text }]}>Gagal Memuat Data</Text>
+      <Text style={[styles.title, { color: c.text }]}>{t.splash.loadFailedTitle}</Text>
       <Text style={[styles.errMsg, { color: c.subtext, borderColor: c.border }]}>
         {message}
       </Text>
       <View style={{ width: '100%', maxWidth: 320 }}>
-        <PrimaryButton label="Coba Lagi" icon="rotate" onPress={onRetry} />
+        <PrimaryButton label={t.splash.retry} icon="rotate" onPress={onRetry} />
       </View>
     </View>
   );

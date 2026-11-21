@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { COLORS, GROUPS, hexA, parseIcon } from '../lib/icons';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 
 interface Props {
   value: string;
@@ -19,8 +20,10 @@ function findGroupIndex(cls: string): number {
   return GROUPS.findIndex((g) => g.items.some(([n]) => 'fa-solid fa-' + n === cls));
 }
 
-export function IconPicker({ value, onChange, label = 'Pilih ikon & warna' }: Props) {
+export function IconPicker({ value, onChange, label }: Props) {
   const { c } = useTheme();
+  const { t, language } = useLanguage();
+  const displayLabel = label ?? t.iconPicker.label;
   const parsed = parseIcon(value);
   const initialCls = parsed.kind === 'fa' ? `fa-solid fa-${parsed.name}` : 'fa-solid fa-tag';
   const gi = findGroupIndex(initialCls);
@@ -46,8 +49,8 @@ export function IconPicker({ value, onChange, label = 'Pilih ikon & warna' }: Pr
           />
         </View>
         <View style={{ flexShrink: 1 }}>
-          <Text style={{ color: c.text, fontSize: 14, fontWeight: '600' }}>{label}</Text>
-          <Text style={{ color: c.muted, fontSize: 11 }}>Ketuk ikon, lalu pilih warna favorit</Text>
+          <Text style={{ color: c.text, fontSize: 14, fontWeight: '600' }}>{displayLabel}</Text>
+          <Text style={{ color: c.muted, fontSize: 11 }}>{t.iconPicker.hint}</Text>
         </View>
       </View>
 
@@ -55,6 +58,7 @@ export function IconPicker({ value, onChange, label = 'Pilih ikon & warna' }: Pr
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
         {GROUPS.map((g, i) => {
           const active = i === group;
+          const groupLabel = (t.iconPicker.groups as Record<string, string>)[g.label] ?? g.label;
           return (
             <Pressable
               key={g.label}
@@ -69,7 +73,7 @@ export function IconPicker({ value, onChange, label = 'Pilih ikon & warna' }: Pr
             >
               <FontAwesome6 name={g.icon as any} solid size={11} color={active ? c.primary : c.subtext} />
               <Text style={{ fontSize: 12, fontWeight: active ? '700' : '500', color: active ? c.primary : c.subtext }}>
-                {g.label}
+                {groupLabel}
               </Text>
             </Pressable>
           );
@@ -126,7 +130,9 @@ export function IconPicker({ value, onChange, label = 'Pilih ikon & warna' }: Pr
         })}
       </View>
 
-      <Text style={{ color: c.muted, fontSize: 11 }}>Pratinjau: {preview}</Text>
+      <Text style={{ color: c.muted, fontSize: 11 }}>
+        {language === 'en' ? 'Preview' : 'Pratinjau'}: {preview}
+      </Text>
     </View>
   );
 }

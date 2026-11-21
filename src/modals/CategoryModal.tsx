@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useApp } from '../state/AppContext';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { ModalSheet } from '../components/ModalSheet';
 import {
   AppTextInput,
@@ -23,6 +24,7 @@ type CatType = 'income' | 'expense';
 export function CategoryModal() {
   const { modal, closeModal, snap, refresh, showToast } = useApp();
   const { c } = useTheme();
+  const { t, language } = useLanguage();
 
   const editingId = modal?.key === 'category' ? modal.param : null;
   const defaultType = (modal?.extra as CatType) || 'expense';
@@ -37,7 +39,7 @@ export function CategoryModal() {
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
-    if (!name.trim()) return showToast('Nama kategori harus diisi', 'warning');
+    if (!name.trim()) return showToast(t.categoryModal.nameWarning, 'warning');
     const payload: CategoryPayload = {
       name: name.trim(),
       type,
@@ -50,10 +52,10 @@ export function CategoryModal() {
       if (editingId) await updateCategory(editingId, payload, existing!);
       else await addCategory(payload);
       await refresh();
-      showToast(editingId ? 'Kategori berhasil diperbarui' : 'Kategori berhasil ditambahkan', 'success');
+      showToast(editingId ? t.categoryModal.updatedSuccess : t.categoryModal.savedSuccess, 'success');
       closeModal();
     } catch (err: any) {
-      showToast('Gagal menyimpan kategori: ' + (err?.message || String(err)), 'error');
+      showToast(t.categoryModal.saveFailed + ': ' + (err?.message || String(err)), 'error');
     } finally {
       setSaving(false);
     }
@@ -62,12 +64,12 @@ export function CategoryModal() {
   return (
     <ModalSheet
       visible={modal?.key === 'category'}
-      title={editingId ? 'Edit Kategori' : 'Tambah Kategori'}
+      title={editingId ? t.categoryModal.editTitle : t.categoryModal.addTitle}
       onClose={closeModal}
       maxWidth={440}
     >
       <View style={{ gap: 6 }}>
-        <FieldLabel>Jenis</FieldLabel>
+        <FieldLabel>{t.categoryModal.typeLabel}</FieldLabel>
         <SegmentedControl<CatType>
           value={type}
           onChange={setType}
@@ -75,18 +77,18 @@ export function CategoryModal() {
           activeSoft={type === 'income' ? c.successSoft : c.dangerSoft}
           columns={2}
           options={[
-            { value: 'income', label: 'Pemasukan' },
-            { value: 'expense', label: 'Pengeluaran' },
+            { value: 'income', label: t.common.income },
+            { value: 'expense', label: t.common.expense },
           ]}
         />
       </View>
 
       <View style={{ gap: 6 }}>
-        <FieldLabel>Nama Kategori</FieldLabel>
+        <FieldLabel>{t.categoryModal.nameLabel}</FieldLabel>
         <AppTextInput
           value={name}
           onChangeText={setName}
-          placeholder="Contoh: Gaji, Makan, Transportasi"
+          placeholder={t.categoryModal.namePlaceholder}
         />
       </View>
 
@@ -94,13 +96,13 @@ export function CategoryModal() {
 
       {type === 'expense' ? (
         <View style={{ gap: 6 }}>
-          <FieldLabel>Batas Anggaran per Bulan (Rp) — opsional</FieldLabel>
+          <FieldLabel>{t.categoryModal.budgetLimitLabel}</FieldLabel>
           <NumberInput value={budgetText} onValueChange={setBudgetText} placeholder="0" />
         </View>
       ) : null}
 
       <PrimaryButton
-        label={editingId ? 'Perbarui Kategori' : 'Simpan Kategori'}
+        label={editingId ? (language === 'en' ? 'Update Category' : 'Perbarui Kategori') : t.categoryModal.saveBtn}
         onPress={submit}
         loading={saving}
       />

@@ -15,6 +15,7 @@ import { FontAwesome6 } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../state/ThemeContext';
 import { useApp } from '../state/AppContext';
+import { useLanguage } from '../state/LanguageContext';
 import { PinDots, PinKeypad } from './PinKeypad';
 import { getPinLength, getPinLengthSync, verifyPin } from '../lib/auth';
 
@@ -24,6 +25,7 @@ const MAX_PIN = 6;
 export function LockScreen() {
   const { c } = useTheme();
   const { unlock } = useApp();
+  const { t, interpolate } = useLanguage();
   const insets = useSafeAreaInsets();
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
@@ -149,13 +151,13 @@ export function LockScreen() {
         <View style={[styles.logo, { backgroundColor: c.primary }]}>
           <FontAwesome6 name="wallet" solid size={30} color="#fff" />
         </View>
-        <Text style={[styles.title, { color: c.text }]}>Keuangan Keluarga</Text>
+        <Text style={[styles.title, { color: c.text }]}>{t.lockScreen.title}</Text>
         <Text style={[styles.sub, { color: c.muted }]}>
           {error
-            ? 'PIN salah, coba lagi'
+            ? t.lockScreen.wrongPin
             : expectedLen
-            ? `Masukkan ${expectedLen} digit PIN untuk membuka aplikasi`
-            : 'Masukkan PIN untuk membuka aplikasi'}
+            ? interpolate(t.lockScreen.promptWithLen, { len: expectedLen })
+            : t.lockScreen.promptDefault}
         </Text>
       </View>
 
@@ -172,7 +174,7 @@ export function LockScreen() {
       />
 
       <View style={styles.reloadHint}>
-        <Text style={[styles.reloadText, { color: c.muted }]}>Lindungi data keuangan keluarga Anda</Text>
+        <Text style={[styles.reloadText, { color: c.muted }]}>{t.lockScreen.footerHint}</Text>
       </View>
     </View>
   );

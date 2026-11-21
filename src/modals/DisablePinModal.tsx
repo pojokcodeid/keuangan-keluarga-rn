@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApp } from '../state/AppContext';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { ModalSheet } from '../components/ModalSheet';
 import { FieldLabel } from '../components/form';
 import { PinDots, PinKeypad } from '../components/PinKeypad';
@@ -14,6 +15,7 @@ import { disablePin, getPinLength } from '../lib/auth';
 export function DisablePinModal() {
   const { modal, closeModal, showToast } = useApp();
   const { c } = useTheme();
+  const { t, language } = useLanguage();
   const [pin, setPin] = useState('');
   const [pinLen, setPinLen] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,14 +52,14 @@ export function DisablePinModal() {
 
   const submit = async () => {
     if (busy) return;
-    if (!pin) return showToast('Masukkan PIN untuk konfirmasi', 'warning');
+    if (!pin) return showToast(t.disablePinModal.prompt, 'warning');
     setBusy(true);
     try {
       await disablePin(pin);
-      showToast('Proteksi PIN telah dinonaktifkan', 'info');
+      showToast(t.disablePinModal.disabledSuccess, 'info');
       handleClose();
     } catch (err: any) {
-      showToast('Gagal mematikan PIN: ' + (err?.message || String(err)), 'error');
+      showToast(t.disablePinModal.disableFailed + ': ' + (err?.message || String(err)), 'error');
       setPin('');
     } finally {
       setBusy(false);
@@ -67,18 +69,20 @@ export function DisablePinModal() {
   return (
     <ModalSheet
       visible={modal?.key === 'disablePin'}
-      title="Nonaktifkan Kunci PIN"
+      title={t.disablePinModal.title}
       onClose={handleClose}
       maxWidth={440}
     >
       <View style={{ gap: 6 }}>
         <Text style={{ fontSize: 12, color: c.subtext, lineHeight: 18 }}>
-          Masukkan PIN saat ini untuk menonaktifkan proteksi aplikasi:
+          {t.disablePinModal.hint}
         </Text>
-        <FieldLabel>PIN Saat Ini</FieldLabel>
+        <FieldLabel>{t.pinModal.currentStep}</FieldLabel>
         <PinDots value={pin} length={pinLen ?? 6} />
         <Text style={[styles.hint, { color: c.muted }]}>
-          Masukkan PIN lalu tekan ✓ untuk menonaktifkan
+          {language === 'en'
+            ? 'Enter PIN then press ✓ to disable'
+            : 'Masukkan PIN lalu tekan ✓ untuk menonaktifkan'}
         </Text>
       </View>
 

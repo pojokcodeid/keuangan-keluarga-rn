@@ -7,6 +7,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useApp } from '../state/AppContext';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { Card, Chip, EmptyState, SectionTitle } from '../components/ui';
 import { TransactionRowItem } from '../components/TransactionRow';
 import { tone } from '../components/charts';
@@ -20,12 +21,6 @@ import {
 import { formatCurrency } from '../lib/utils';
 import { IconBadge, resolveBudgetIcon } from '../lib/icons';
 
-const PERIOD: Record<string, { label: string; icon: string; color: string }> = {
-  daily: { label: 'Harian', icon: 'sun', color: '#F59E0B' },
-  weekly: { label: 'Mingguan', icon: 'calendar-week', color: '#3B82F6' },
-  monthly: { label: 'Bulanan', icon: 'calendar-days', color: '#8B5CF6' },
-};
-
 /** Ikon akun mengikuti jenisnya (sama dengan Pengaturan → Akun & Dompet) */
 const accountIcon = (type: string): string => {
   if (type === 'bank') return 'building-columns';
@@ -33,18 +28,10 @@ const accountIcon = (type: string): string => {
   return 'wallet';
 };
 
-const ACCOUNT_TYPE: Record<string, string> = {
-  cash: 'Dompet / Kas Tunai',
-  wallet: 'Dompet / Kas Tunai',
-  bank: 'Rekening Bank',
-  'e-wallet': 'E-Wallet',
-  savings: 'Tabungan',
-  other: 'Lainnya',
-};
-
 export function DashboardScreen() {
   const { snap, setTab, openModal } = useApp();
   const { c } = useTheme();
+  const { t, language } = useLanguage();
 
   const { month, year } = currentMonthYear();
   const income = getMonthlyIncome(snap.transactions, month, year);
@@ -56,6 +43,12 @@ export function DashboardScreen() {
     .sort((a, b) => b.percentage - a.percentage);
   const recent = snap.transactions.slice(0, 5);
 
+  const getPeriodLabel = (periodType: string) => {
+    if (periodType === 'daily') return t.common.daily;
+    if (periodType === 'weekly') return t.common.weekly;
+    return t.common.monthly;
+  };
+
   return (
     <ScrollView
       contentContainerStyle={styles.content}
@@ -63,15 +56,16 @@ export function DashboardScreen() {
     >
       {/* Kartu rincian sisa saldo tiap akun & dompet */}
       <View style={[styles.hero, { backgroundColor: c.primary }]}>
-        <Text style={styles.heroLabel}>Sisa Saldo Semua Akun & Dompet</Text>
+        <Text style={styles.heroLabel}>{t.dashboard.heroBalanceTitle}</Text>
         {snap.accounts.length === 0 ? (
-          <Text style={styles.heroEmpty}>
-            Belum ada akun atau dompet. Tambahkan lewat menu Pengaturan → Akun & Dompet.
-          </Text>
+          <Text style={styles.heroEmpty}>{t.dashboard.heroEmpty}</Text>
         ) : (
           <View style={styles.heroList}>
             {snap.accounts.map((acc, i) => {
               const balance = getAccountBalance(snap.accounts, snap.transactions, acc.id);
+              const typeLabel =
+                t.accountTypes[acc.type as keyof typeof t.accountTypes] ||
+                (language === 'en' ? 'Account' : 'Akun');
               return (
                 <View
                   key={acc.id}
@@ -85,7 +79,7 @@ export function DashboardScreen() {
                       {acc.name}
                     </Text>
                     <Text style={styles.heroAccType} numberOfLines={1}>
-                      {ACCOUNT_TYPE[acc.type] || 'Akun'}
+                      {typeLabel}
                     </Text>
                   </View>
                   <Text
@@ -105,52 +99,53 @@ export function DashboardScreen() {
           <View style={styles.heroTile}>
             <View style={styles.heroTileHead}>
               <FontAwesome6 name="arrow-trend-up" solid size={12} color="#a7f3d0" />
-              <Text style={styles.heroTileLabel}>Pemasukan</Text>
+              <Text style={styles.heroTileLabel}>{t.common.income}</Text>
             </View>
             <Text style={styles.heroTileValue} numberOfLines={1} adjustsFontSizeToFit>
               {formatCurrency(income)}
             </Text>
-            <Text style={styles.heroTileSub}>Bulan ini</Text>
+            <Text style={styles.heroTileSub}>{t.dashboard.thisMonth}</Text>
           </View>
           <View style={styles.heroTile}>
             <View style={styles.heroTileHead}>
               <FontAwesome6 name="arrow-trend-down" solid size={12} color="#fecdd3" />
-              <Text style={styles.heroTileLabel}>Pengeluaran</Text>
+              <Text style={styles.heroTileLabel}>{t.common.expense}</Text>
             </View>
             <Text style={styles.heroTileValue} numberOfLines={1} adjustsFontSizeToFit>
               {formatCurrency(expense)}
             </Text>
-            <Text style={styles.heroTileSub}>Bulan ini</Text>
+            <Text style={styles.heroTileSub}>{t.dashboard.thisMonth}</Text>
           </View>
         </View>
       </View>
 
       {/* Peringatan anggaran */}
       <View>
-        <SectionTitle icon="shield-halved">Peringatan Anggaran</SectionTitle>
+        <SectionTitle icon="shield-halved">{t.dashboard.budgetAlertsTitle}</SectionTitle>
         <View style={{ gap: 8 }}>
           {activeBudgets.length === 0 ? (
             <Card style={styles.alertCard}>
               <IconBadge icon="fa-solid fa-bullseye|#6366F1" size={32} />
               <Text style={[styles.alertMuted, { color: c.muted }]}>
-                Belum ada budget. Buat di menu Budget.
+                {t.dashboard.noBudgets}
               </Text>
             </Card>
           ) : alerts.length === 0 ? (
             <Card style={styles.alertCard}>
               <IconBadge icon="fa-solid fa-shield-heart|#10B981" size={32} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.alertTitle, { color: c.text }]}>Semua Budget Aman</Text>
+                <Text style={[styles.alertTitle, { color: c.text }]}>{t.dashboard.allBudgetsSafe}</Text>
                 <Text style={[styles.alertMuted, { color: c.muted }]}>
-                  Pengeluaran masih di bawah 75% dari batas.
+                  {t.dashboard.allBudgetsSafeSub}
                 </Text>
               </View>
             </Card>
           ) : (
             alerts.map((b) => {
               const pct = Math.round(b.percentage);
-              const t = tone(b.percentage);
-              const P = PERIOD[b.period_type] || PERIOD.monthly;
+              const toneData = tone(b.percentage);
+              const pLabel = getPeriodLabel(b.period_type);
+              const chipLabel = `${pct}% ${b.percentage >= 100 ? t.common.overBudget : t.common.nearLimit}`;
               return (
                 <Card key={b.id} style={styles.alertFull}>
                   <View style={styles.alertHead}>
@@ -159,12 +154,12 @@ export function DashboardScreen() {
                       <Text style={[styles.alertTitle, { color: c.text }]} numberOfLines={1}>
                         {b.name}
                       </Text>
-                      <Text style={[styles.alertPeriod, { color: c.muted }]}>{P.label}</Text>
+                      <Text style={[styles.alertPeriod, { color: c.muted }]}>{pLabel}</Text>
                     </View>
                     <Chip
-                      label={`${pct}% ${b.percentage >= 100 ? 'Melebihi' : 'Hampir habis'}`}
-                      color={t.c1}
-                      icon={t.icon}
+                      label={chipLabel}
+                      color={toneData.c1}
+                      icon={toneData.icon}
                     />
                   </View>
                   <View style={[styles.track, { backgroundColor: c.cardAlt }]}>
@@ -173,17 +168,17 @@ export function DashboardScreen() {
                         styles.fill,
                         {
                           width: `${Math.min(pct, 100)}%` as any,
-                          backgroundColor: t.c1,
+                          backgroundColor: toneData.c1,
                         },
                       ]}
                     />
                   </View>
                   <View style={styles.alertFoot}>
                     <Text style={[styles.alertMuted, { color: c.muted }]}>
-                      Terpakai: {formatCurrency(b.spent)}
+                      {t.dashboard.spent}: {formatCurrency(b.spent)}
                     </Text>
                     <Text style={[styles.alertMuted, { color: c.muted }]}>
-                      Batas: {formatCurrency(b.amount_limit)}
+                      {t.dashboard.limit}: {formatCurrency(b.amount_limit)}
                     </Text>
                   </View>
                 </Card>
@@ -202,18 +197,18 @@ export function DashboardScreen() {
               onPress={() => setTab('transaksi')}
               style={[styles.link, { color: c.primary }]}
             >
-              Lihat Semua →
+              {t.dashboard.viewAll}
             </Text>
           }
         >
-          Transaksi Terakhir
+          {t.dashboard.recentTransactionsTitle}
         </SectionTitle>
         <Card>
           {recent.length === 0 ? (
             <EmptyState
               icon="inbox"
-              title="Belum ada transaksi"
-              subtitle="Ketuk tombol + untuk menambah transaksi pertama"
+              title={t.dashboard.noTransactionsTitle}
+              subtitle={t.dashboard.noTransactionsSub}
             />
           ) : (
             recent.map((tx, i) => (

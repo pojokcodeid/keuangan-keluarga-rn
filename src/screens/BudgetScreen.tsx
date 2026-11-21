@@ -8,6 +8,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useApp } from '../state/AppContext';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { Card, Chip, EmptyState, IconBtn, SectionTitle } from '../components/ui';
 import { tone } from '../components/charts';
 import {
@@ -20,10 +21,10 @@ import { formatCurrency, formatDate } from '../lib/utils';
 import { hexA, IconBadge, resolveBudgetIcon } from '../lib/icons';
 import { deleteBudget } from '../lib/db';
 
-const PERIOD: Record<string, { label: string; icon: string; color: string }> = {
-  daily: { label: 'Harian', icon: 'sun', color: '#F59E0B' },
-  weekly: { label: 'Mingguan', icon: 'calendar-week', color: '#3B82F6' },
-  monthly: { label: 'Bulanan', icon: 'calendar-days', color: '#8B5CF6' },
+const PERIOD_CONFIG: Record<string, { icon: string; color: string }> = {
+  daily: { icon: 'sun', color: '#F59E0B' },
+  weekly: { icon: 'calendar-week', color: '#3B82F6' },
+  monthly: { icon: 'calendar-days', color: '#8B5CF6' },
 };
 
 /** Kartu kecil (Terpakai / Sisa / Aman per hari) */
@@ -75,6 +76,7 @@ function SummaryCell({
 export function BudgetScreen() {
   const { snap, refresh, showToast, confirm, openModal } = useApp();
   const { c } = useTheme();
+  const { t, language } = useLanguage();
 
   const items = useMemo(() => getBudgetStatuses(snap), [snap]);
   const { month, year } = currentMonthYear();
@@ -88,57 +90,75 @@ export function BudgetScreen() {
   const allocPct = income > 0 ? Math.round((alloc / income) * 100) : null;
   const free = income - alloc;
 
+  const getPeriodLabel = (p: string) => {
+    if (p === 'daily') return t.common.daily;
+    if (p === 'weekly') return t.common.weekly;
+    return t.common.monthly;
+  };
+
   const handleDelete = async (id: number) => {
-    const ok = await confirm('Hapus Budget', 'Budget ini akan dihapus. Transaksi tidak terpengaruh.');
+    const ok = await confirm(t.budget.deleteConfirmTitle, t.budget.deleteConfirmMsg);
     if (!ok) return;
     try {
       await deleteBudget(id);
-      showToast('Budget dihapus', 'success');
+      showToast(t.budget.deletedSuccess, 'success');
       await refresh();
     } catch (err: any) {
-      showToast(err?.message || 'Gagal menghapus budget', 'error');
+      showToast(err?.message || t.budget.deleteFailed, 'error');
     }
   };
 
   return (
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View>
-        <Text style={[styles.title, { color: c.text }]}>Budget & Anggaran</Text>
+        <Text style={[styles.title, { color: c.text }]}>
+          {language === 'en' ? 'Budgets & Planning' : 'Budget & Anggaran'}
+        </Text>
         <Text style={[styles.subtitle, { color: c.muted }]}>
-          Batasi pengeluaran harian, mingguan, atau bulanan.
+          {language === 'en'
+            ? 'Control daily, weekly, or monthly expenses.'
+            : 'Batasi pengeluaran harian, mingguan, atau bulanan.'}
         </Text>
       </View>
 
       {/* Ringkasan alokasi bulan berjalan */}
       <View style={styles.sumGrid}>
-        <SummaryCell icon="arrow-trend-up" color="#10B981" label="Pemasukan" value={formatCurrency(income)} sub="Bulan ini" />
+        <SummaryCell
+          icon="arrow-trend-up"
+          color="#10B981"
+          label={t.common.income}
+          value={formatCurrency(income)}
+          sub={t.dashboard.thisMonth}
+        />
         <SummaryCell
           icon="arrow-trend-down"
           color="#F43F5E"
-          label="Pengeluaran"
+          label={t.common.expense}
           value={formatCurrency(expense)}
-          sub={spentPct === null ? 'Bulan ini' : `${spentPct}% dari pemasukan`}
+          sub={spentPct === null ? t.dashboard.thisMonth : (language === 'en' ? `${spentPct}% of income` : `${spentPct}% dari pemasukan`)}
         />
         <SummaryCell
           icon="bullseye"
           color="#6366F1"
-          label="Total budget"
+          label={language === 'en' ? 'Total budget' : 'Total budget'}
           value={formatCurrency(alloc)}
-          sub={allocPct === null ? 'Bulanan' : `${allocPct}% dari pemasukan`}
+          sub={allocPct === null ? t.common.monthly : (language === 'en' ? `${allocPct}% of income` : `${allocPct}% dari pemasukan`)}
         />
         <SummaryCell
           icon="scale-balanced"
           color={free >= 0 ? '#14B8A6' : '#F43F5E'}
-          label="Belum dialokasi"
+          label={t.budget.freeAllocation}
           value={formatCurrency(free)}
-          sub="Pemasukan − budget"
+          sub={language === 'en' ? 'Income − budget' : 'Pemasukan − budget'}
         />
       </View>
 
       {income > 0 && alloc > income ? (
         <View style={[styles.warnBox, { backgroundColor: c.dangerSoft, borderColor: hexA('#e11d48', 0.35) }]}>
           <Text style={[styles.warnText, { color: c.danger }]}>
-            Total budget bulanan melebihi pemasukan bulan ini.
+            {language === 'en'
+              ? 'Total monthly budget exceeds this month’s income.'
+              : 'Total budget bulanan melebihi pemasukan bulan ini.'}
           </Text>
         </View>
       ) : null}
@@ -148,21 +168,25 @@ export function BudgetScreen() {
         <Card>
           <EmptyState
             icon="bullseye"
-            title="Belum ada budget"
-            subtitle="Buat budget harian, mingguan, atau bulanan untuk mengontrol pengeluaran."
+            title={t.budget.noBudgetsTitle}
+            subtitle={t.budget.noBudgetsSub}
           />
         </Card>
       ) : (
         <View style={{ gap: 12 }}>
-          <SectionTitle icon="list-ul">Daftar Budget</SectionTitle>
+          <SectionTitle icon="list-ul">{t.budget.budgetListTitle}</SectionTitle>
           {items.map((b) => {
             const pct = Math.round(b.percentage);
-            const t = tone(b.percentage);
-            const P = PERIOD[b.period_type] || PERIOD.monthly;
+            const toneData = tone(b.percentage);
+            const pConfig = PERIOD_CONFIG[b.period_type] || PERIOD_CONFIG.monthly;
+            const pLabel = getPeriodLabel(b.period_type);
+            const statusLabel =
+              pct >= 100 ? t.common.overBudget : pct >= 75 ? t.common.nearLimit : t.common.safe;
+
             const thirdTile =
               b.period_type === 'daily'
-                ? { icon: 'flag-checkered', label: 'Batas', value: formatCurrency(b.amount_limit) }
-                : { icon: 'hourglass-half', label: 'Aman/hari', value: formatCurrency(b.dailySafe) };
+                ? { icon: 'flag-checkered', label: t.dashboard.limit, value: formatCurrency(b.amount_limit) }
+                : { icon: 'hourglass-half', label: t.budget.safePerDay, value: formatCurrency(b.dailySafe) };
 
             return (
               <Card key={b.id} style={b.is_active ? undefined : { opacity: 0.6 }}>
@@ -174,15 +198,19 @@ export function BudgetScreen() {
                         {b.name}
                       </Text>
                       <View style={styles.chips}>
-                        <Chip label={P.label} color={P.color} icon={P.icon} />
+                        <Chip label={pLabel} color={pConfig.color} icon={pConfig.icon} />
                         {b.category_id ? (
                           <Chip
-                            label={b.category_name || 'Kategori'}
+                            label={b.category_name || (language === 'en' ? 'Category' : 'Kategori')}
                             color={c.subtext}
                             node={<IconBadge icon={b.category_icon} size={16} />}
                           />
                         ) : (
-                          <Chip label="Semua pengeluaran" color="#64748B" icon="receipt" />
+                          <Chip
+                            label={language === 'en' ? 'All expenses' : 'Semua pengeluaran'}
+                            color="#64748B"
+                            icon="receipt"
+                          />
                         )}
                       </View>
                     </View>
@@ -194,7 +222,7 @@ export function BudgetScreen() {
 
                   <View>
                     <View style={styles.pctRow}>
-                      <Text style={[styles.pct, { color: t.c1 }]}>{pct}%</Text>
+                      <Text style={[styles.pct, { color: toneData.c1 }]}>{pct}%</Text>
                       <Text style={[styles.pctSub, { color: c.muted }]}>
                         {formatCurrency(b.spent)} / {formatCurrency(b.amount_limit)}
                       </Text>
@@ -203,32 +231,32 @@ export function BudgetScreen() {
                       <View
                         style={[
                           styles.fill,
-                          { width: `${Math.min(pct, 100)}%` as any, backgroundColor: t.c1 },
+                          { width: `${Math.min(pct, 100)}%` as any, backgroundColor: toneData.c1 },
                         ]}
                       />
                     </View>
                   </View>
 
                   <View style={styles.tiles}>
-                    <Tile icon="wallet" color="#F43F5E" label="Terpakai" value={formatCurrency(b.spent)} />
+                    <Tile icon="wallet" color="#F43F5E" label={t.budget.spent} value={formatCurrency(b.spent)} />
                     {b.remaining >= 0 ? (
-                      <Tile icon="piggy-bank" color="#10B981" label="Sisa" value={formatCurrency(b.remaining)} />
+                      <Tile icon="piggy-bank" color="#10B981" label={t.budget.remaining} value={formatCurrency(b.remaining)} />
                     ) : (
-                      <Tile icon="fire" color="#F43F5E" label="Lebih" value={formatCurrency(-b.remaining)} />
+                      <Tile icon="fire" color="#F43F5E" label={language === 'en' ? 'Over' : 'Lebih'} value={formatCurrency(-b.remaining)} />
                     )}
                     <Tile icon={thirdTile.icon} color="#6366F1" label={thirdTile.label} value={thirdTile.value} />
                   </View>
 
                   <View style={styles.footer}>
                     {b.is_active ? (
-                      <Chip label={t.label} color={t.c1} icon={t.icon} />
+                      <Chip label={statusLabel} color={toneData.c1} icon={toneData.icon} />
                     ) : (
-                      <Chip label="Nonaktif" color="#64748B" icon="pause" />
+                      <Chip label={t.common.inactive} color="#64748B" icon="pause" />
                     )}
                     <Text style={[styles.period, { color: c.muted }]}>
                       {b.period_type === 'daily'
-                        ? formatDate(b.start)
-                        : `${formatDate(b.start)} – ${formatDate(b.end)}`}
+                        ? formatDate(b.start, language)
+                        : `${formatDate(b.start, language)} – ${formatDate(b.end, language)}`}
                     </Text>
                   </View>
                 </View>

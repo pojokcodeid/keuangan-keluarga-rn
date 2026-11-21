@@ -14,7 +14,8 @@ import {
 } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useTheme } from '../state/ThemeContext';
-import { MONTH_NAMES_SHORT, getCurrentMonth, getCurrentYear, pad2 } from '../lib/utils';
+import { useLanguage } from '../state/LanguageContext';
+import { getMonthNamesShort, getCurrentMonth, getCurrentYear, pad2 } from '../lib/utils';
 import { FieldLabel } from './form';
 
 const ITEM_H = 40;
@@ -101,6 +102,7 @@ function WheelPickerSheet({
   children: React.ReactNode;
 }) {
   const { c } = useTheme();
+  const { t } = useLanguage();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <View style={styles.flex}>
@@ -108,11 +110,11 @@ function WheelPickerSheet({
         <View style={[styles.sheet, { backgroundColor: c.card }]}>
           <View style={[styles.sheetHeader, { borderBottomColor: c.border }]}>
             <Pressable onPress={onClose} hitSlop={10} style={{ padding: 6 }}>
-              <Text style={{ color: c.subtext, fontSize: 14, fontWeight: '600' }}>Batal</Text>
+              <Text style={{ color: c.subtext, fontSize: 14, fontWeight: '600' }}>{t.datePickers.cancel}</Text>
             </Pressable>
             <Text style={{ color: c.text, fontSize: 15, fontWeight: '700' }}>{title}</Text>
             <Pressable onPress={onConfirm} hitSlop={10} style={{ padding: 6 }}>
-              <Text style={{ color: c.primary, fontSize: 14, fontWeight: '700' }}>Pilih</Text>
+              <Text style={{ color: c.primary, fontSize: 14, fontWeight: '700' }}>{t.datePickers.select}</Text>
             </Pressable>
           </View>
           <View style={styles.wheelArea}>{children}</View>
@@ -136,6 +138,7 @@ export function DateField({
   onChange: (v: string) => void;
 }) {
   const { c } = useTheme();
+  const { t, language } = useLanguage();
   const [open, setOpen] = useState(false);
 
   const [y, m, d] = value.split('-').map(Number);
@@ -156,7 +159,7 @@ export function DateField({
 
   const daysInMonth = new Date(selYear, selMonth, 0).getDate();
   const dayItems = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
-  const monthItems = MONTH_NAMES_SHORT;
+  const monthItems = getMonthNamesShort(language);
   const nowYear = getCurrentYear();
   const yearItems = Array.from({ length: 11 }, (_, i) => String(nowYear - 5 + i));
 
@@ -167,7 +170,7 @@ export function DateField({
   };
 
   const display = value
-    ? `${String(day).padStart(2, '0')} ${MONTH_NAMES_SHORT[month - 1] || ''} ${year}`
+    ? `${String(day).padStart(2, '0')} ${monthItems[month - 1] || ''} ${year}`
     : '-';
 
   return (
@@ -182,7 +185,7 @@ export function DateField({
         <FontAwesome6 name="chevron-down" size={11} color={c.muted} />
       </Pressable>
 
-      <WheelPickerSheet visible={open} title="Pilih Tanggal" onClose={() => setOpen(false)} onConfirm={confirm}>
+      <WheelPickerSheet visible={open} title={t.datePickers.pickDate} onClose={() => setOpen(false)} onConfirm={confirm}>
         <Wheel
           items={dayItems}
           index={Math.min(selDay, daysInMonth) - 1}
@@ -190,7 +193,7 @@ export function DateField({
           width={70}
         />
         <Wheel
-          items={monthItems}
+          items={monthItems as string[]}
           index={selMonth - 1}
           onChange={(i) => setSelMonth(i + 1)}
           width={110}
@@ -217,6 +220,7 @@ export function MonthField({
   style?: any;
 }) {
   const { c } = useTheme();
+  const { language } = useLanguage();
   const [open, setOpen] = useState(false);
 
   const [vy, vm] = value.split('-').map(Number);
@@ -228,6 +232,7 @@ export function MonthField({
 
   const nowYear = getCurrentYear();
   const yearItems = Array.from({ length: 11 }, (_, i) => String(nowYear - 5 + i));
+  const monthItems = getMonthNamesShort(language);
 
   const confirm = () => {
     onChange(`${selYear}-${pad2(selMonth)}`);
@@ -247,13 +252,18 @@ export function MonthField({
       >
         <FontAwesome6 name="calendar-days" size={14} color={c.muted} />
         <Text style={{ color: c.text, fontSize: 14, fontWeight: '600', flex: 1 }}>
-          {MONTH_NAMES_SHORT[month - 1] || ''} {year}
+          {monthItems[month - 1] || ''} {year}
         </Text>
         <FontAwesome6 name="chevron-down" size={11} color={c.muted} />
       </Pressable>
 
-      <WheelPickerSheet visible={open} title="Pilih Bulan" onClose={() => setOpen(false)} onConfirm={confirm}>
-        <Wheel items={MONTH_NAMES_SHORT} index={selMonth - 1} onChange={(i) => setSelMonth(i + 1)} width={120} />
+      <WheelPickerSheet
+        visible={open}
+        title={language === 'en' ? 'Select Month' : 'Pilih Bulan'}
+        onClose={() => setOpen(false)}
+        onConfirm={confirm}
+      >
+        <Wheel items={monthItems as string[]} index={selMonth - 1} onChange={(i) => setSelMonth(i + 1)} width={120} />
         <Wheel items={yearItems} index={yearItems.indexOf(String(selYear))} onChange={(i) => setSelYear(Number(yearItems[i]))} width={90} />
       </WheelPickerSheet>
     </View>

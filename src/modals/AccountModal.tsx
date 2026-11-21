@@ -2,8 +2,10 @@
 // AccountModal.tsx — Tambah / edit akun (port dari modal-account)
 // =============================================================================
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { View } from 'react-native';
 import { useApp } from '../state/AppContext';
+import { useLanguage } from '../state/LanguageContext';
 import { ModalSheet } from '../components/ModalSheet';
 import {
   AppTextInput,
@@ -14,18 +16,21 @@ import {
 } from '../components/form';
 import { addAccount, AccountPayload, updateAccount } from '../lib/db';
 import { formatNumberString, parseAmount } from '../lib/utils';
-import { View } from 'react-native';
-
-const ACCOUNT_TYPES = [
-  { value: 'wallet', label: '💰 Dompet / Tunai' },
-  { value: 'bank', label: '🏦 Rekening Bank' },
-  { value: 'e-wallet', label: '📱 E-Wallet' },
-  { value: 'savings', label: '🐷 Tabungan' },
-  { value: 'other', label: '📦 Lainnya' },
-];
 
 export function AccountModal() {
   const { modal, closeModal, snap, refresh, showToast } = useApp();
+  const { t, language } = useLanguage();
+
+  const accountTypes = useMemo(
+    () => [
+      { value: 'wallet', label: t.accountModal.typeWallet },
+      { value: 'bank', label: t.accountModal.typeBank },
+      { value: 'e-wallet', label: t.accountModal.typeEwallet },
+      { value: 'savings', label: t.accountModal.typeSavings },
+      { value: 'other', label: t.accountModal.typeOther },
+    ],
+    [t]
+  );
 
   const editingId = modal?.key === 'account' ? modal.param : null;
   const existing = editingId ? snap.accounts.find((a) => a.id === editingId) : null;
@@ -38,7 +43,7 @@ export function AccountModal() {
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
-    if (!name.trim()) return showToast('Nama akun harus diisi', 'warning');
+    if (!name.trim()) return showToast(t.accountModal.nameWarning, 'warning');
     const payload: AccountPayload = {
       name: name.trim(),
       type,
@@ -51,10 +56,10 @@ export function AccountModal() {
       if (editingId) await updateAccount(editingId, payload, existing!);
       else await addAccount(payload);
       await refresh();
-      showToast(editingId ? 'Akun berhasil diperbarui' : 'Akun berhasil ditambahkan', 'success');
+      showToast(editingId ? t.accountModal.updatedSuccess : t.accountModal.savedSuccess, 'success');
       closeModal();
     } catch (err: any) {
-      showToast('Gagal menyimpan akun: ' + (err?.message || String(err)), 'error');
+      showToast(t.accountModal.saveFailed + ': ' + (err?.message || String(err)), 'error');
     } finally {
       setSaving(false);
     }
@@ -63,34 +68,34 @@ export function AccountModal() {
   return (
     <ModalSheet
       visible={modal?.key === 'account'}
-      title={editingId ? 'Edit Akun' : 'Tambah Akun'}
+      title={editingId ? t.accountModal.editTitle : t.accountModal.addTitle}
       onClose={closeModal}
       maxWidth={440}
     >
       <View style={{ gap: 6 }}>
-        <FieldLabel>Nama Akun</FieldLabel>
+        <FieldLabel>{t.accountModal.nameLabel}</FieldLabel>
         <AppTextInput
           value={name}
           onChangeText={setName}
-          placeholder="Contoh: Dompet, BCA, GoPay"
+          placeholder={t.accountModal.namePlaceholder}
         />
       </View>
 
       <View style={{ gap: 6 }}>
-        <FieldLabel>Saldo Awal (Rp)</FieldLabel>
+        <FieldLabel>{t.accountModal.balanceLabel} (Rp)</FieldLabel>
         <NumberInput value={balanceText} onValueChange={setBalanceText} placeholder="0" />
       </View>
 
       <SelectField
-        label="Jenis Akun"
+        label={t.accountModal.typeLabel}
         value={type}
-        options={ACCOUNT_TYPES}
+        options={accountTypes}
         onChange={setType}
-        placeholder="Pilih Jenis"
+        placeholder={language === 'en' ? 'Select Type' : 'Pilih Jenis'}
       />
 
       <PrimaryButton
-        label={editingId ? 'Perbarui Akun' : 'Simpan Akun'}
+        label={editingId ? (language === 'en' ? 'Update Account' : 'Perbarui Akun') : t.accountModal.saveBtn}
         onPress={submit}
         loading={saving}
       />

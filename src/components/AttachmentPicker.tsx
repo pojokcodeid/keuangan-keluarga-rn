@@ -18,6 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { deleteAttachmentFile, saveAttachmentImage } from '../lib/db';
 import { beginExternalActivity, endExternalActivity } from '../lib/auth';
 import { getFileSize } from '../lib/compress';
@@ -33,13 +34,16 @@ interface Props {
 export function AttachmentPicker({
   value,
   onChange,
-  label = 'Foto / Bukti Transaksi (opsional)',
+  label,
 }: Props) {
   const { c } = useTheme();
+  const { t, language } = useLanguage();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [pickerModalOpen, setPickerModalOpen] = useState(false);
+
+  const displayLabel = label || t.attachment.title;
 
   // Ukuran file lampiran (bukti kompresi) — dihitung saat nilai berubah
   const fileSize = useMemo(() => (value ? getFileSize(value) : 0), [value]);
@@ -53,8 +57,8 @@ export function AttachmentPicker({
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
-          'Izin Kamera Ditolak',
-          'Aplikasi membutuhkan izin akses kamera untuk mengambil foto bukti transaksi secara langsung. Silakan aktifkan izin di Pengaturan HP Anda.'
+          t.attachment.cameraPermissionDeniedTitle,
+          t.attachment.cameraPermissionDeniedMsg
         );
         return;
       }
@@ -78,7 +82,10 @@ export function AttachmentPicker({
         onChange(savedUri);
       }
     } catch (err: any) {
-      Alert.alert('Gagal Mengambil Foto', err?.message || 'Terjadi kesalahan saat membuka kamera');
+      Alert.alert(
+        language === 'en' ? 'Failed to Take Photo' : 'Gagal Mengambil Foto',
+        err?.message || (language === 'en' ? 'An error occurred while opening camera' : 'Terjadi kesalahan saat membuka kamera')
+      );
     } finally {
       endExternalActivity();
       setLoading(false);
@@ -94,8 +101,8 @@ export function AttachmentPicker({
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
-          'Izin Galeri Ditolak',
-          'Aplikasi membutuhkan izin akses galeri foto untuk memilih foto bukti transaksi. Silakan aktifkan izin di Pengaturan HP Anda.'
+          t.attachment.galleryPermissionDeniedTitle,
+          t.attachment.galleryPermissionDeniedMsg
         );
         return;
       }
@@ -118,7 +125,10 @@ export function AttachmentPicker({
         onChange(savedUri);
       }
     } catch (err: any) {
-      Alert.alert('Gagal Memilih Foto', err?.message || 'Terjadi kesalahan saat membuka galeri');
+      Alert.alert(
+        language === 'en' ? 'Failed to Select Photo' : 'Gagal Memilih Foto',
+        err?.message || (language === 'en' ? 'An error occurred while opening gallery' : 'Terjadi kesalahan saat membuka galeri')
+      );
     } finally {
       endExternalActivity();
       setLoading(false);
@@ -127,30 +137,34 @@ export function AttachmentPicker({
 
   // --- Hapus Lampiran ---
   const handleRemove = () => {
-    Alert.alert('Hapus Bukti Foto', 'Apakah Anda yakin ingin menghapus foto lampiran ini?', [
-      { text: 'Batal', style: 'cancel' },
-      {
-        text: 'Hapus',
-        style: 'destructive',
-        onPress: () => {
-          if (value) {
-            deleteAttachmentFile(value);
-          }
-          onChange(null);
+    Alert.alert(
+      t.attachment.deletePhotoConfirmTitle,
+      t.attachment.deletePhotoConfirmMsg,
+      [
+        { text: t.common.cancel, style: 'cancel' },
+        {
+          text: t.common.delete,
+          style: 'destructive',
+          onPress: () => {
+            if (value) {
+              deleteAttachmentFile(value);
+            }
+            onChange(null);
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   return (
     <View style={{ gap: 8 }}>
-      <FieldLabel>{label}</FieldLabel>
+      <FieldLabel>{displayLabel}</FieldLabel>
 
       {loading ? (
         <View style={[styles.loadingBox, { backgroundColor: c.cardAlt, borderColor: c.border }]}>
           <ActivityIndicator size="small" color={c.primary} />
           <Text style={{ fontSize: 13, color: c.muted, fontWeight: '500' }}>
-            Memproses foto...
+            {language === 'en' ? 'Processing photo...' : 'Memproses foto...'}
           </Text>
         </View>
       ) : value ? (
@@ -167,11 +181,13 @@ export function AttachmentPicker({
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <FontAwesome6 name="circle-check" solid size={14} color={c.success} />
               <Text style={{ fontSize: 13, fontWeight: '700', color: c.text }}>
-                Bukti Foto Terlampir
+                {language === 'en' ? 'Proof Photo Attached' : 'Bukti Foto Terlampir'}
               </Text>
             </View>
             <Text style={{ fontSize: 11, color: c.muted }}>
-              {fileSize > 0 ? `${formatFileSize(fileSize)} · dikompresi otomatis` : 'Ketuk foto untuk memperbesar'}
+              {fileSize > 0
+                ? (language === 'en' ? `${formatFileSize(fileSize)} · auto-compressed` : `${formatFileSize(fileSize)} · dikompresi otomatis`)
+                : (language === 'en' ? 'Tap photo to zoom' : 'Ketuk foto untuk memperbesar')}
             </Text>
 
             <View style={styles.actionRow}>
@@ -180,7 +196,9 @@ export function AttachmentPicker({
                 style={[styles.smallBtn, { backgroundColor: c.primarySoft }]}
               >
                 <FontAwesome6 name="camera-rotate" size={12} color={c.primary} />
-                <Text style={[styles.smallBtnText, { color: c.primary }]}>Ganti</Text>
+                <Text style={[styles.smallBtnText, { color: c.primary }]}>
+                  {language === 'en' ? 'Change' : 'Ganti'}
+                </Text>
               </Pressable>
 
               <Pressable
@@ -188,7 +206,7 @@ export function AttachmentPicker({
                 style={[styles.smallBtn, { backgroundColor: c.dangerSoft }]}
               >
                 <FontAwesome6 name="trash-can" size={12} color={c.danger} />
-                <Text style={[styles.smallBtnText, { color: c.danger }]}>Hapus</Text>
+                <Text style={[styles.smallBtnText, { color: c.danger }]}>{t.common.delete}</Text>
               </Pressable>
             </View>
           </View>
@@ -210,8 +228,8 @@ export function AttachmentPicker({
               <FontAwesome6 name="camera" solid size={16} color={c.primary} />
             </View>
             <View style={{ flexShrink: 1 }}>
-              <Text style={[styles.btnTitle, { color: c.text }]}>Kamera Langsung</Text>
-              <Text style={[styles.btnSub, { color: c.muted }]}>Ambil foto bukti</Text>
+              <Text style={[styles.btnTitle, { color: c.text }]}>{t.attachment.camera}</Text>
+              <Text style={[styles.btnSub, { color: c.muted }]}>{t.attachment.cameraSub}</Text>
             </View>
           </Pressable>
 
@@ -229,8 +247,8 @@ export function AttachmentPicker({
               <FontAwesome6 name="image" solid size={16} color="#3b82f6" />
             </View>
             <View style={{ flexShrink: 1 }}>
-              <Text style={[styles.btnTitle, { color: c.text }]}>Galeri HP</Text>
-              <Text style={[styles.btnSub, { color: c.muted }]}>Pilih dari album</Text>
+              <Text style={[styles.btnTitle, { color: c.text }]}>{t.attachment.gallery}</Text>
+              <Text style={[styles.btnSub, { color: c.muted }]}>{t.attachment.gallerySub}</Text>
             </View>
           </Pressable>
         </View>
@@ -250,9 +268,11 @@ export function AttachmentPicker({
           onPress={() => setPickerModalOpen(false)}
         >
           <View style={[styles.modalDialog, { backgroundColor: c.card }]}>
-            <Text style={[styles.modalTitle, { color: c.text }]}>Ganti Foto Bukti Transaksi</Text>
+            <Text style={[styles.modalTitle, { color: c.text }]}>
+              {language === 'en' ? 'Change Proof Photo' : 'Ganti Foto Bukti Transaksi'}
+            </Text>
             <Text style={[styles.modalSub, { color: c.muted }]}>
-              Pilih cara pengambilan foto bukti transaksi:
+              {t.attachment.chooseMethod}
             </Text>
 
             <View style={{ gap: 10, marginTop: 12 }}>
@@ -264,8 +284,12 @@ export function AttachmentPicker({
                   <FontAwesome6 name="camera" solid size={16} color={c.primary} />
                 </View>
                 <View>
-                  <Text style={[styles.btnTitle, { color: c.text }]}>Buka Kamera</Text>
-                  <Text style={[styles.btnSub, { color: c.muted }]}>Ambil foto baru langsung</Text>
+                  <Text style={[styles.btnTitle, { color: c.text }]}>
+                    {language === 'en' ? 'Open Camera' : 'Buka Kamera'}
+                  </Text>
+                  <Text style={[styles.btnSub, { color: c.muted }]}>
+                    {language === 'en' ? 'Take new photo directly' : 'Ambil foto baru langsung'}
+                  </Text>
                 </View>
               </Pressable>
 
@@ -277,8 +301,12 @@ export function AttachmentPicker({
                   <FontAwesome6 name="image" solid size={16} color="#3b82f6" />
                 </View>
                 <View>
-                  <Text style={[styles.btnTitle, { color: c.text }]}>Pilih dari Galeri</Text>
-                  <Text style={[styles.btnSub, { color: c.muted }]}>Ambil dari foto tersimpan</Text>
+                  <Text style={[styles.btnTitle, { color: c.text }]}>
+                    {language === 'en' ? 'Choose from Gallery' : 'Pilih dari Galeri'}
+                  </Text>
+                  <Text style={[styles.btnSub, { color: c.muted }]}>
+                    {language === 'en' ? 'Pick from saved photos' : 'Ambil dari foto tersimpan'}
+                  </Text>
                 </View>
               </Pressable>
 
@@ -286,7 +314,7 @@ export function AttachmentPicker({
                 onPress={() => setPickerModalOpen(false)}
                 style={[styles.cancelBtn, { backgroundColor: c.cardAlt }]}
               >
-                <Text style={{ color: c.subtext, fontWeight: '700', fontSize: 14 }}>Batal</Text>
+                <Text style={{ color: c.subtext, fontWeight: '700', fontSize: 14 }}>{t.common.cancel}</Text>
               </Pressable>
             </View>
           </View>
@@ -311,7 +339,7 @@ export function AttachmentPicker({
                 { paddingTop: insets.top + (Platform.OS === 'android' ? 12 : 6) },
               ]}
             >
-              <Text style={styles.viewerTitle}>Bukti Transaksi</Text>
+              <Text style={styles.viewerTitle}>{t.attachment.viewPhotoTitle}</Text>
               <Pressable
                 onPress={() => setViewerOpen(false)}
                 hitSlop={12}
@@ -336,7 +364,9 @@ export function AttachmentPicker({
                 style={styles.viewerBtn}
               >
                 <FontAwesome6 name="camera-rotate" size={14} color="#fff" />
-                <Text style={styles.viewerBtnText}>Ganti Foto</Text>
+                <Text style={styles.viewerBtnText}>
+                  {language === 'en' ? 'Change Photo' : 'Ganti Foto'}
+                </Text>
               </Pressable>
               <Pressable
                 onPress={() => {
@@ -346,7 +376,7 @@ export function AttachmentPicker({
                 style={[styles.viewerBtn, { backgroundColor: 'rgba(225,29,72,0.85)' }]}
               >
                 <FontAwesome6 name="trash-can" size={14} color="#fff" />
-                <Text style={styles.viewerBtnText}>Hapus</Text>
+                <Text style={styles.viewerBtnText}>{t.attachment.deletePhoto}</Text>
               </Pressable>
             </View>
           </View>

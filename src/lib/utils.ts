@@ -3,22 +3,54 @@
 // Keuangan Keluarga — React Native
 // =============================================================================
 
+import type { Language } from '../i18n/translations';
+
 // ---------------------------------------------------------------------------
-// Indonesian locale data
+// Locale data
 // ---------------------------------------------------------------------------
-export const MONTH_NAMES = [
+export const MONTH_NAMES_ID = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ];
 
-export const MONTH_NAMES_SHORT = [
+export const MONTH_NAMES_SHORT_ID = [
   'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
   'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
 ];
 
-export const DAY_NAMES = [
+export const DAY_NAMES_ID = [
   'Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu',
 ];
+
+export const MONTH_NAMES_EN = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+export const MONTH_NAMES_SHORT_EN = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+export const DAY_NAMES_EN = [
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+];
+
+export const MONTH_NAMES = MONTH_NAMES_ID;
+export const MONTH_NAMES_SHORT = MONTH_NAMES_SHORT_ID;
+export const DAY_NAMES = DAY_NAMES_ID;
+
+export function getMonthNames(lang: Language = 'id'): readonly string[] {
+  return lang === 'en' ? MONTH_NAMES_EN : MONTH_NAMES_ID;
+}
+
+export function getMonthNamesShort(lang: Language = 'id'): readonly string[] {
+  return lang === 'en' ? MONTH_NAMES_SHORT_EN : MONTH_NAMES_SHORT_ID;
+}
+
+export function getDayNames(lang: Language = 'id'): readonly string[] {
+  return lang === 'en' ? DAY_NAMES_EN : DAY_NAMES_ID;
+}
 
 // ---------------------------------------------------------------------------
 // Currency & number formatting
@@ -92,19 +124,22 @@ export function parseDate(dateStr: string | null | undefined): Date {
 }
 
 /** "2024-01-15" → "15 Jan 2024" */
-export function formatDate(dateStr: string | null | undefined): string {
+export function formatDate(dateStr: string | null | undefined, lang: Language = 'id'): string {
   const dt = parseDate(dateStr);
-  return `${dt.getDate()} ${MONTH_NAMES_SHORT[dt.getMonth()]} ${dt.getFullYear()}`;
+  const months = getMonthNamesShort(lang);
+  return `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
 }
 
 /** "2024-01-15" → "Senin, 15 Januari 2024" */
-export function formatDateFull(dateStr: string | null | undefined): string {
+export function formatDateFull(dateStr: string | null | undefined, lang: Language = 'id'): string {
   const dt = parseDate(dateStr);
-  return `${DAY_NAMES[dt.getDay()]}, ${dt.getDate()} ${MONTH_NAMES[dt.getMonth()]} ${dt.getFullYear()}`;
+  const days = getDayNames(lang);
+  const months = getMonthNames(lang);
+  return `${days[dt.getDay()]}, ${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
 }
 
 /** Label grup transaksi: "Hari Ini" / "Kemarin" / "15 Januari 2024" */
-export function formatDateGroup(dateStr: string | null | undefined): string {
+export function formatDateGroup(dateStr: string | null | undefined, lang: Language = 'id'): string {
   const dt = parseDate(dateStr);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -113,21 +148,24 @@ export function formatDateGroup(dateStr: string | null | undefined): string {
   const diffMs = today.getTime() - dt.getTime();
   const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDays === 0) return 'Hari Ini';
-  if (diffDays === 1) return 'Kemarin';
+  if (diffDays === 0) return lang === 'en' ? 'Today' : 'Hari Ini';
+  if (diffDays === 1) return lang === 'en' ? 'Yesterday' : 'Kemarin';
 
-  return `${dt.getDate()} ${MONTH_NAMES[dt.getMonth()]} ${dt.getFullYear()}`;
+  const months = getMonthNames(lang);
+  return `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
 }
 
 /** Nama bulan (1-12) */
-export function getMonthName(month: number): string {
-  return MONTH_NAMES[(month - 1 + 12) % 12];
+export function getMonthName(month: number, lang: Language = 'id'): string {
+  const months = getMonthNames(lang);
+  return months[(month - 1 + 12) % 12];
 }
 
 /** "Januari 2024" */
-export function getMonthYear(date?: Date): string {
+export function getMonthYear(date?: Date, lang: Language = 'id'): string {
   const dt = date instanceof Date ? date : new Date();
-  return `${MONTH_NAMES[dt.getMonth()]} ${dt.getFullYear()}`;
+  const months = getMonthNames(lang);
+  return `${months[dt.getMonth()]} ${dt.getFullYear()}`;
 }
 
 export function getCurrentMonth(): number {
@@ -172,11 +210,14 @@ export function getPeriodRange(
 }
 
 /** Format angka ringkas untuk sumbu grafik: "Rp 1,2 jt" */
-export function formatAxisLabel(value: number): string {
+export function formatAxisLabel(value: number, lang: Language = 'id'): string {
   if (value === 0) return 'Rp 0';
   const abs = Math.abs(value);
-  if (abs >= 1_000_000_000) return `Rp ${(value / 1_000_000_000).toFixed(1)} M`;
-  if (abs >= 1_000_000) return `Rp ${(value / 1_000_000).toFixed(1)} jt`;
-  if (abs >= 1_000) return `Rp ${(value / 1_000).toFixed(0)} rb`;
+  const mUnit = lang === 'en' ? 'B' : 'M';
+  const kUnit = lang === 'en' ? 'k' : 'rb';
+  const jUnit = lang === 'en' ? 'M' : 'jt';
+  if (abs >= 1_000_000_000) return `Rp ${(value / 1_000_000_000).toFixed(1)} ${mUnit}`;
+  if (abs >= 1_000_000) return `Rp ${(value / 1_000_000).toFixed(1)} ${jUnit}`;
+  if (abs >= 1_000) return `Rp ${(value / 1_000).toFixed(0)} ${kUnit}`;
   return `Rp ${value}`;
 }

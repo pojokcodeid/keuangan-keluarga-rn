@@ -8,13 +8,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { TransactionRow as Tx } from '../lib/db';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { IconBadge } from '../lib/icons';
 import { formatCurrency, formatDate } from '../lib/utils';
 
-const TYPE_BADGE: Record<string, { label: string; bg: string; fg: string }> = {
-  income: { label: 'Pemasukan', bg: 'rgba(16,185,129,0.12)', fg: '#10B981' },
-  expense: { label: 'Pengeluaran', bg: 'rgba(244,63,94,0.10)', fg: '#E11D48' },
-  transfer: { label: 'Transfer', bg: 'rgba(59,130,246,0.12)', fg: '#3B82F6' },
+const BADGE_COLORS: Record<string, { bg: string; fg: string }> = {
+  income: { bg: 'rgba(16,185,129,0.12)', fg: '#10B981' },
+  expense: { bg: 'rgba(244,63,94,0.10)', fg: '#E11D48' },
+  transfer: { bg: 'rgba(59,130,246,0.12)', fg: '#3B82F6' },
 };
 
 const AMOUNT_COLOR: Record<string, string> = {
@@ -33,18 +34,27 @@ export function TransactionRowItem({
   divider?: boolean;
 }) {
   const { c } = useTheme();
+  const { t, language } = useLanguage();
   const isTransfer = tx.type === 'transfer';
-  const badge = TYPE_BADGE[tx.type] || TYPE_BADGE.transfer;
+  const badgeColors = BADGE_COLORS[tx.type] || BADGE_COLORS.transfer;
+  const badgeLabel =
+    tx.type === 'income'
+      ? t.common.income
+      : tx.type === 'expense'
+      ? t.common.expense
+      : t.common.transfer;
 
   const iconValue = isTransfer
     ? 'fa-solid fa-right-left|#3B82F6'
     : tx.category_icon || (tx.type === 'income' ? 'briefcase' : 'shopping-cart');
 
+  const defaultAccountName = language === 'en' ? 'Account' : 'Akun';
+  const defaultToAccountName = language === 'en' ? 'Destination Account' : 'Akun Tujuan';
   const title = isTransfer
-    ? `${tx.account_name || 'Akun'} → ${tx.to_account_name || 'Akun Tujuan'}`
-    : tx.category_name || 'Tanpa Kategori';
+    ? `${tx.account_name || defaultAccountName} → ${tx.to_account_name || defaultToAccountName}`
+    : tx.category_name || t.transaksi.noCategory;
 
-  const subInfo = isTransfer ? 'Transfer Antar-Akun' : tx.account_name || '';
+  const subInfo = isTransfer ? t.transaksi.interAccountTransfer : tx.account_name || '';
   const prefix = tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : '';
 
   return (
@@ -58,11 +68,9 @@ export function TransactionRowItem({
       <IconBadge icon={iconValue} size={38} />
       <View style={styles.body}>
         <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
-            {title}
-          </Text>
-          <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-            <Text style={[styles.badgeText, { color: badge.fg }]}>{badge.label}</Text>
+          <Text style={[styles.title, { color: c.text }]}>{title}</Text>
+          <View style={[styles.badge, { backgroundColor: badgeColors.bg }]}>
+            <Text style={[styles.badgeText, { color: badgeColors.fg }]}>{badgeLabel}</Text>
           </View>
         </View>
         <View style={styles.subRow}>
@@ -73,7 +81,9 @@ export function TransactionRowItem({
           {tx.attachment_uri ? (
             <View style={[styles.attachBadge, { backgroundColor: c.cardAlt }]}>
               <FontAwesome6 name="paperclip" size={9} color={c.primary} />
-              <Text style={[styles.attachText, { color: c.primary }]}>Foto</Text>
+              <Text style={[styles.attachText, { color: c.primary }]}>
+                {language === 'en' ? 'Photo' : 'Foto'}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -83,7 +93,7 @@ export function TransactionRowItem({
           {prefix}
           {formatCurrency(tx.amount)}
         </Text>
-        <Text style={[styles.date, { color: c.muted }]}>{formatDate(tx.transaction_date)}</Text>
+        <Text style={[styles.date, { color: c.muted }]}>{formatDate(tx.transaction_date, language)}</Text>
       </View>
     </Pressable>
   );

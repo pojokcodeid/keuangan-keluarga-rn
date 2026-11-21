@@ -8,6 +8,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useApp } from '../state/AppContext';
 import { useTheme } from '../state/ThemeContext';
+import { useLanguage } from '../state/LanguageContext';
 import { Card, EmptyState, SectionTitle } from '../components/ui';
 import { SegmentedControl } from '../components/form';
 import { MonthField } from '../components/DatePickers';
@@ -18,9 +19,8 @@ import {
   getExpenseByCategory,
   getIncomeVsExpense,
   getMonthlySummary,
-  SHORT_MONTHS,
 } from '../lib/selectors';
-import { formatCurrency, getCurrentMonth, getCurrentYear, parseDate } from '../lib/utils';
+import { formatCurrency, getCurrentMonth, getCurrentYear, getMonthNamesShort } from '../lib/utils';
 import { COLORS } from '../lib/icons';
 import { exportToExcel } from '../lib/excel';
 
@@ -58,6 +58,7 @@ function SummaryCard({
 export function LaporanScreen() {
   const { snap, showToast } = useApp();
   const { c } = useTheme();
+  const { t, language } = useLanguage();
   const [tab, setTab] = useState<ReportTab>('ringkasan');
   const [monthStr, setMonthStr] = useState(
     `${getCurrentYear()}-${String(getCurrentMonth()).padStart(2, '0')}`
@@ -92,11 +93,11 @@ export function LaporanScreen() {
   const budgetBars = useMemo(() => {
     const active = getBudgetStatuses(snap, true);
     return active.map((b) => {
-      const t = tone(b.percentage);
+      const toneData = tone(b.percentage);
       return {
         label: b.name,
         percent: b.percentage,
-        color: t.c1,
+        color: toneData.c1,
         sublabel: `${formatCurrency(b.spent)} / ${formatCurrency(b.amount_limit)}`,
       };
     });
@@ -106,13 +107,15 @@ export function LaporanScreen() {
     [snap.transactions]
   );
   const barPoints = useMemo(
-    () =>
-      series.map((s) => ({
-        label: SHORT_MONTHS[s.month - 1],
+    () => {
+      const shortMonths = getMonthNamesShort(language);
+      return series.map((s) => ({
+        label: shortMonths[s.month - 1],
         income: s.income,
         expense: s.expense,
-      })),
-    [series]
+      }));
+    },
+    [series, language]
   );
 
   const totalExpense = expenseByCat.reduce((s, r) => s + r.total, 0);
@@ -122,9 +125,9 @@ export function LaporanScreen() {
     setExporting(true);
     try {
       await exportToExcel(snap, { month, year });
-      showToast('Laporan Excel berhasil dibagikan', 'success');
+      showToast(t.laporan.exportExcelSuccess, 'success');
     } catch (err: any) {
-      showToast('Gagal mengekspor Excel: ' + (err?.message || String(err)), 'error');
+      showToast(t.laporan.exportExcelFailed + ': ' + (err?.message || String(err)), 'error');
     } finally {
       setExporting(false);
     }
@@ -140,8 +143,8 @@ export function LaporanScreen() {
           activeColor={c.primary}
           activeSoft={c.primarySoft}
           options={[
-            { value: 'ringkasan', label: 'Ringkasan', icon: 'list-ul' },
-            { value: 'grafik', label: 'Grafik', icon: 'chart-simple' },
+            { value: 'ringkasan', label: t.laporan.tabSummary, icon: 'list-ul' },
+            { value: 'grafik', label: t.laporan.tabCharts, icon: 'chart-simple' },
           ]}
         />
       </View>
@@ -160,7 +163,7 @@ export function LaporanScreen() {
           ]}
         >
           <FontAwesome6 name="download" solid size={13} color="#fff" />
-          <Text style={styles.excelText}>{exporting ? 'Memproses…' : 'Excel'}</Text>
+          <Text style={styles.excelText}>{exporting ? t.laporan.exporting : 'Excel'}</Text>
         </Pressable>
       </View>
 
@@ -172,7 +175,7 @@ export function LaporanScreen() {
               icon="arrow-trend-up"
               iconBg={c.successSoft}
               iconColor={c.success}
-              label="Pemasukan"
+              label={t.common.income}
               value={formatCurrency(summary.totalIncome)}
               valueColor={c.success}
             />
@@ -180,7 +183,7 @@ export function LaporanScreen() {
               icon="arrow-trend-down"
               iconBg={c.dangerSoft}
               iconColor={c.danger}
-              label="Pengeluaran"
+              label={t.common.expense}
               value={formatCurrency(summary.totalExpense)}
               valueColor={c.danger}
             />
@@ -188,7 +191,7 @@ export function LaporanScreen() {
               icon="wallet"
               iconBg={c.primarySoft}
               iconColor={c.primary}
-              label="Selisih"
+              label={t.laporan.netDifference}
               value={formatCurrency(summary.net)}
               valueColor={summary.net >= 0 ? c.primary : c.danger}
             />
@@ -196,13 +199,17 @@ export function LaporanScreen() {
 
           {/* Penggunaan anggaran per kategori */}
           <View>
-            <SectionTitle icon="bullseye">Penggunaan Anggaran</SectionTitle>
+            <SectionTitle icon="bullseye">{t.laporan.budgetUsageTitle}</SectionTitle>
             <Card>
               {budgetUsage.length === 0 ? (
                 <EmptyState
                   icon="bullseye"
-                  title="Belum ada kategori pengeluaran dengan batas anggaran"
-                  subtitle="Atur batas anggaran di menu Pengaturan → Kategori"
+                  title={t.laporan.noBudgetUsage}
+                  subtitle={
+                    language === 'en'
+                      ? 'Set budget limits in Settings → Categories'
+                      : 'Atur batas anggaran di menu Pengaturan → Kategori'
+                  }
                 />
               ) : (
                 budgetUsage.map((item, i) => {
@@ -233,10 +240,10 @@ export function LaporanScreen() {
                       </View>
                       <View style={styles.usageFoot}>
                         <Text style={[styles.usageSub, { color: c.muted }]}>
-                          Terpakai: <Text style={{ color: c.subtext, fontWeight: '700' }}>{formatCurrency(item.spent)}</Text>
+                          {t.dashboard.spent}: <Text style={{ color: c.subtext, fontWeight: '700' }}>{formatCurrency(item.spent)}</Text>
                         </Text>
                         <Text style={[styles.usageSub, { color: c.muted }]}>
-                          Batas: <Text style={{ color: c.subtext, fontWeight: '700' }}>{formatCurrency(item.budgetLimit)}</Text>
+                          {t.dashboard.limit}: <Text style={{ color: c.subtext, fontWeight: '700' }}>{formatCurrency(item.budgetLimit)}</Text>
                         </Text>
                       </View>
                     </View>
@@ -250,16 +257,16 @@ export function LaporanScreen() {
         <View style={{ gap: 16 }}>
           {/* Donut: pengeluaran per kategori */}
           <View>
-            <SectionTitle icon="chart-pie">Pengeluaran per Kategori</SectionTitle>
+            <SectionTitle icon="chart-pie">{t.laporan.expenseByCategoryTitle}</SectionTitle>
             <Card style={styles.chartCard}>
               {expenseByCat.length === 0 ? (
-                <EmptyState icon="chart-pie" title="Belum ada data pengeluaran" />
+                <EmptyState icon="chart-pie" title={t.laporan.noExpensesThisMonth} />
               ) : (
                 <>
                   <View style={styles.donutWrap}>
                     <DonutChart
                       data={donutSlices}
-                      centerLabel="Total Pengeluaran"
+                      centerLabel={t.laporan.centerDonutLabel}
                       centerValue={formatCurrency(totalExpense)}
                     />
                   </View>
@@ -285,20 +292,27 @@ export function LaporanScreen() {
 
           {/* Budget vs realisasi */}
           <View>
-            <SectionTitle icon="bullseye">Budget vs Realisasi</SectionTitle>
+            <SectionTitle icon="bullseye">
+              {language === 'en' ? 'Budget vs Actual' : 'Budget vs Realisasi'}
+            </SectionTitle>
             <Card style={styles.chartCard}>
-              <HBarList items={budgetBars} />
+              <HBarList items={budgetBars} emptyText={t.laporan.noActiveBudget} />
             </Card>
           </View>
 
           {/* Pemasukan vs pengeluaran 6 bulan */}
           <View>
-            <SectionTitle icon="chart-column">Pemasukan vs Pengeluaran (6 Bulan Terakhir)</SectionTitle>
+            <SectionTitle icon="chart-column">{t.laporan.sixMonthTrendTitle}</SectionTitle>
             <Card style={styles.chartCard}>
               {barPoints.every((p) => p.income === 0 && p.expense === 0) ? (
-                <EmptyState icon="chart-column" title="Belum ada data transaksi" />
+                <EmptyState icon="chart-column" title={t.dashboard.noTransactionsTitle} />
               ) : (
-                <GroupedBarChart data={barPoints} />
+                <GroupedBarChart
+                  data={barPoints}
+                  incomeLabel={t.laporan.legendIncome}
+                  expenseLabel={t.laporan.legendExpense}
+                  lang={language}
+                />
               )}
             </Card>
           </View>
@@ -306,8 +320,9 @@ export function LaporanScreen() {
       )}
 
       <Text style={[styles.note, { color: c.muted }]}>
-        Periode laporan: {parseDate(`${year}-${String(month).padStart(2, '0')}-01`).getFullYear()} ·{' '}
-        {SHORT_MONTHS[month - 1]} · {summary.transactionCount} transaksi
+        {language === 'en'
+          ? `Report period: ${year} · ${getMonthNamesShort(language)[month - 1]} · ${summary.transactionCount} transactions`
+          : `Periode laporan: ${year} · ${getMonthNamesShort(language)[month - 1]} · ${summary.transactionCount} transaksi`}
       </Text>
     </ScrollView>
   );
